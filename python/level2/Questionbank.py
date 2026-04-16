@@ -1,3 +1,5 @@
+#Q6 Group by category + sum
+
 items = [
     {"id": "a1", "category": "electronics", "amount": 999},
     {"id": "a2", "category": "electronics", "amount": 599},
@@ -6,9 +8,11 @@ items = [
     {"id": "a5", "category": "clothing",    "amount": 89},
     {"id": "a6", "category": "electronics", "amount": None},
 ]
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-#Q6 Group by category + sum
+
+
 """ Group by category Sum amounts per category Skip None amounts"""
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 #Q7  Flatten nested tags
 
@@ -21,6 +25,8 @@ nested = [
 ]
 
 """ Flatten all tags into one unique list Skip None and empty tags"""
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 #Q8  Merge two lists by key
 
@@ -36,6 +42,8 @@ customers = [
 ]
 """ Merge orders and customers by id  Only include matched records """
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
 #Q9  Running total
 
 items = [
@@ -46,6 +54,8 @@ items = [
     {"id": "t5", "amount": 150},
 ]
 """ Add running_total field to each item  Handle None amounts (treat as 0) """
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 #Q10 Find duplicates
 
@@ -58,6 +68,8 @@ items = [
 ]
 """ Add running_total field to each item Handle None amounts (treat as 0)"""
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
 #Q11  Pivot data
 
 records = [
@@ -69,6 +81,8 @@ records = [
 """ Pivot so each name is a row Subjects become columns 
 Output: [{"name": "Alice", "math": 95, "science": 88}, ...] """
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
 #Q12  Transpose
 data = {
     "name":   ["Alice", "Bob", "Charlie"],
@@ -78,12 +92,16 @@ data = {
 """ Convert column dict to list of row dicts
  Output: [{"name": "Alice", "age": 25, "salary": 90000}, ...] """
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
 #Q13  Sliding window average
 
 numbers = [100, 200, 150, 300, 250, 400, 350]
 window_size = 3
 """ Calculate average for each window of 3
  Output: [150.0, 216.67, 233.33, 316.67, 333.33] """
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 #Q14 Two pointer
 
@@ -92,10 +110,14 @@ target = 14
 """ Find all pairs that sum to target No duplicate pairs
  Output: [(1, 13), (3, 11), (5, 9)] """
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
 # Q15  Batch processing
 
 items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 batch_size = 3
 """Split into batches of 3
  Output: [[1,2,3], [4,5,6], [7,8,9], [10]] """
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
