@@ -1,0 +1,162 @@
+DEA-C01 Complete Topic Map
+Domain 1: Data Ingestion & Transformation — 34% (~22 questions) 🔥 BIGGEST
+This is one-third of your exam. Master this domain or fail.
+Task 1.1: Perform Data Ingestion
+Streaming ingestion:
+
+Amazon Kinesis family — Streams vs Firehose vs Analytics  Pass IT Exams
+Amazon MSK (Managed Kafka)
+Amazon Kinesis Data Streams — shards, partition keys, retention, replay
+Amazon Data Firehose — buffer config, dynamic partitioning, format conversion
+Throttling, exponential backoff, idempotency
+
+Batch ingestion:
+
+AWS DMS (Database Migration Service) — full load, CDC, ongoing replication
+AWS DataSync — on-prem to S3/EFS/FSx
+AWS Transfer Family — SFTP/FTPS/FTP to S3
+AWS Snow Family — Snowball, Snowmobile (large physical transfers)
+Amazon AppFlow — SaaS-to-AWS (Salesforce, ServiceNow, Slack)
+
+Task 1.2: Transform & Process Data
+
+AWS Glue — PySpark scripting, job bookmarks, partitioning Pass IT Exams
+Glue Spark jobs vs Glue Python Shell vs Glue Ray
+AWS Glue DataBrew — visual no-code prep
+AWS Lambda — for lightweight transforms
+Amazon EMR — Spark, Hive, Presto, Hudi/Iceberg
+Amazon Managed Service for Apache Flink (KDA Flink) — windowing, joins
+
+Task 1.3: Orchestrate Data Pipelines
+
+AWS Step Functions (Day 4 — your weak area) — state machines, retry, error handling
+Amazon EventBridge — schedules, event-driven triggers
+Amazon MWAA (Managed Airflow) — DAG-based orchestration
+AWS Glue Workflows — for Glue-only pipelines
+
+Task 1.4: Apply Programming Concepts
+
+SQL (joins, window functions, CTEs)
+Python basics (Pandas, PySpark)
+Infrastructure as Code (CloudFormation, CDK)
+Git/CI-CD basics
+Data structures (Parquet, ORC, Avro, JSON)
+
+
+Domain 2: Data Store Management — 26% (~17 questions) 🔥 SECOND BIGGEST
+Task 2.1: Choose a Data Store
+
+Amazon S3 — storage classes, lifecycle, intelligent-tiering, S3 Tables (NEW)
+Amazon Redshift — RA3 nodes, Serverless, Concurrency Scaling
+Amazon DynamoDB — partition keys, GSI/LSI, DAX, on-demand vs provisioned
+Amazon RDS / Aurora — when to choose relational
+Amazon DocumentDB — MongoDB-compatible
+Amazon Neptune — graph database
+Amazon Keyspaces — Cassandra-compatible
+Amazon OpenSearch — search, log analytics
+Amazon MemoryDB / ElastiCache — caching layer
+
+Task 2.2: Design & Manage Data Catalogs
+
+AWS Glue Data Catalog — databases, tables, partitions, classifiers
+AWS Glue Crawlers — schedule, schema evolution
+AWS Lake Formation — catalog governance
+
+Task 2.3: Manage Data Lifecycle
+
+S3 Lifecycle policies (transition, expiration)
+S3 Storage Classes (Standard, IA, One Zone-IA, Glacier Instant/Flexible/Deep Archive)
+S3 Intelligent-Tiering
+Redshift snapshots, backups
+DynamoDB TTL, PITR, on-demand backup
+Cross-region replication
+
+Task 2.4: Design Data Models & Schema
+
+Star schema, snowflake schema, fact/dimension tables
+Slowly Changing Dimensions (SCD Type 1, 2, 3)
+Redshift distribution keys (KEY, EVEN, ALL, AUTO)
+Redshift sort keys (compound, interleaved)
+Partition strategies (S3 Hive-style)
+File formats — Parquet, ORC, Avro vs row-based (CSV, JSON)
+Compaction, small file problem
+
+
+Domain 3: Data Operations & Support — 22% (~14 questions)
+Task 3.1: Automate Data Processing
+
+AWS Glue Workflows
+Step Functions
+EventBridge schedules
+Lambda triggers
+AWS Batch (long-running compute jobs)
+
+Task 3.2: Analyze Data
+
+Amazon Athena — SQL on S3, federated queries, workgroups, query results, partitioning, CTAS
+Amazon Redshift Spectrum — query S3 from Redshift
+Amazon QuickSight — BI dashboards, SPICE, row-level security
+Amazon EMR — Spark/Hive/Presto for big data
+AWS Lake Formation governed tables
+
+Task 3.3: Maintain & Monitor Pipelines
+
+Amazon CloudWatch — metrics, logs, alarms
+AWS CloudTrail — API audit logs
+AWS X-Ray — distributed tracing
+Glue job metrics, Spark UI
+Redshift system tables (STL, SVL, SVV)
+Athena query history
+
+Task 3.4: Ensure Data Quality
+
+AWS Glue Data Quality
+AWS Glue DataBrew profile jobs
+Deequ (open-source data quality on Spark)
+Schema evolution handling
+Null checks, uniqueness, completeness, freshness
+
+
+Domain 4: Data Security & Governance — 18% (~12 questions)
+Task 4.1: Authentication
+
+AWS IAM — users, roles, policies, groups
+IAM Identity Center (formerly SSO)
+IAM federation (SAML, OIDC)
+Service-linked roles
+Trust policies, AssumeRole, STS
+
+Task 4.2: Authorization
+
+IAM policies (identity-based, resource-based)
+S3 bucket policies, ACLs
+AWS Lake Formation permissions
+Lake Formation tag-based access control (LF-TBAC)
+Row-level / column-level / cell-level security
+Cross-account access (RAM, resource policies)
+
+Task 4.3: Data Encryption & Masking
+
+AWS KMS — CMK, AWS-managed vs customer-managed keys
+SSE-S3, SSE-KMS, SSE-C, DSSE-KMS
+Client-side encryption
+TLS in transit
+Secrets Manager (DB credentials, rotation)
+AWS Macie — PII detection
+Glue DataBrew PII masking
+
+Task 4.4: Audit Logging
+
+CloudTrail (data events vs management events)
+VPC Flow Logs
+S3 access logs, S3 server access logging
+Redshift audit logs
+CloudWatch Logs Insights
+AWS Config — compliance monitoring
+
+Task 4.5: Data Privacy & Governance
+
+AWS Lake Formation data filters
+Amazon DataZone — data mesh, data catalog
+Compliance frameworks (GDPR, HIPAA, PCI-DSS basics)
+Data retention policies
