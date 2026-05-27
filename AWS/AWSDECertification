@@ -160,3 +160,16 @@ AWS Lake Formation data filters
 Amazon DataZone — data mesh, data catalog
 Compliance frameworks (GDPR, HIPAA, PCI-DSS basics)
 Data retention policies
+
+================================================
+The 80/20 Rule for Your Exam
+80% of exam questions come from these 8 services:
+
+AWS Glue (Spark + Catalog + DQ)
+Amazon Redshift
+Amazon S3
+Amazon Athena
+AWS Lake Formation
+Amazon Kinesis (all 3)
+AWS Step Functions / EventBridge
+AWS IAM + KMS
