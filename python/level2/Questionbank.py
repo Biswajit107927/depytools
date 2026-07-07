@@ -59,14 +59,18 @@ items = [
 
 #Q10 Find duplicates
 
-items = [
-    {"id": "t1", "amount": 100},
-    {"id": "t2", "amount": 250},
-    {"id": "t3", "amount": 75},
-    {"id": "t4", "amount": 300},
-    {"id": "t5", "amount": 150},
+transactions = [
+    {"txn_id": "t1", "user": "u1", "amount": 100},
+    {"txn_id": "t2", "user": "u2", "amount": 250},
+    {"txn_id": "t3", "user": "u1", "amount": 100},   # dup of t1
+    {"txn_id": "t4", "user": "u3", "amount": 300},
+    {"txn_id": "t5", "user": "u1", "amount": 100},   # dup again
+    {"txn_id": "t6", "user": "u2", "amount": 250},   # dup of t2
 ]
-""" Add running_total field to each item Handle None amounts (treat as 0)"""
+
+"""a duplicate = same (user, amount) pair. 
+Return the list of txn_ids that are duplicates of an earlier transaction (first occurrence is NOT a duplicate)."""
+
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
