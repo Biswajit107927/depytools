@@ -1,0 +1,33 @@
+STEP FUNCTIONS:
+├── Retry logic         → Retry field (MaxAttempts, IntervalSeconds, BackoffRate)
+├── Error handling      → Catch field → fallback state
+├── Long-running tasks  → Set TimeoutSeconds generously
+├── Trigger from S3     → EventBridge → Step Functions (DIRECT)
+└── Activity tasks      → External/human workflows only
+
+GLUE JOB TROUBLESHOOTING:
+├── OOM / "killed by YARN"        → Increase worker memory (G.2X, G.4X)
+├── Job slow (constant data)      → Check DPUs, partitioning, data skew
+├── Gradually increasing runtime  → Job Bookmarks broken (reprocessing!)
+├── Streaming not processing      → Checkpoint stuck / retention expired
+└── Small files on read           → groupFiles + groupSize
+
+MONITORING & ALERTING:
+├── Detect job FAILURE    → EventBridge state change event → SNS
+├── Detect slow jobs      → CloudWatch metric alarm on duration
+├── Detect missing data   → EventBridge + metric alarm on zero events
+└── Data quality checks   → Glue Data Quality (DQDL rules)
+
+AIRFLOW (MWAA):
+├── Trigger Glue job      → AwsGlueJobOperator (native, auto-polls)
+├── Retry failed tasks    → "Clear" task instance
+├── Connection issues     → Check security group outbound rules
+└── Always prefer native AWS operators over Bash/Python+boto3
+
+EVENTBRIDGE DIRECT TARGETS (no Lambda needed):
+├── Step Functions ✅
+├── SNS ✅
+├── SQS ✅
+├── Lambda ✅
+├── Glue Workflows ✅
+└── Kinesis Data Streams ✅

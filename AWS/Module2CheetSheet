@@ -1,0 +1,62 @@
+Quick Cheat Sheet for Domain 2
+
+S3 STORAGE CLASSES:
+├── Accessed daily          → Standard
+├── Accessed < 1x/month     → Standard-IA
+├── Unpredictable access     → Intelligent-Tiering
+├── Archive (mins retrieval) → Glacier Instant/Flexible
+└── Deep archive (hours)     → Glacier Deep Archive
+
+REDSHIFT SORT KEYS:
+├── One dominant filter column    → Compound
+└── Multiple equal filter columns → Interleaved
+
+REDSHIFT DISTRIBUTION:
+├── Join column (high cardinality) → KEY
+├── Small dimension table          → ALL
+├── No clear join pattern          → EVEN
+└── Skewed KEY? → Change to higher-cardinality column
+
+LAKE FORMATION SECURITY:
+├── Hide columns     → Column-level permissions
+├── Hide rows        → Row-level security (data filters)
+└── Scale governance → Tag-based access control (LF-Tags)
+
+PARTITIONING vs BUCKETING:
+├── Few distinct values + common filter → Partition
+├── High cardinality + would cause explosion → Bucket
+└── Already too many partitions → Partition projection
+
+DATA LAKE UPSERTS/SCD:
+└── Always → Apache Hudi or Delta Lake
+
+TAG-BASED ACCESS CONTROL:
+├── "Marketing team can access tables tagged 'dept=marketing'"
+├── "Finance team can access tables tagged 'dept=finance'"
+└── Controls ACCESS to entire resources (tables/columns)
+    → It's a GOVERNANCE MODEL for organizing permissions at scale
+
+ROW-LEVEL SECURITY (DATA FILTERS):
+├── "Analyst X can see this table BUT only rows where region != 'EU'"
+├── "Manager Y can see only rows where department = 'sales'"
+└── Controls WHICH DATA within a table is visible
+    → It's a DATA FILTER on query results
+
+COMPOUND vs INTERLEAVED SORT KEY:
+├── Compound: Filters MUST go left-to-right (like a phone book)
+│   └── KEY(a, b, c): WHERE a=? ✅ | WHERE a=? AND b=? ✅ | WHERE b=? ❌
+├── Interleaved: Any column combo works
+│   └── KEY(a, b, c): WHERE b=? ✅ | WHERE c=? ✅ | WHERE a=? AND c=? ✅
+└── Trade-off: Interleaved needs VACUUM REINDEX (higher maintenance)
+
+PARTITIONING vs BUCKETING:
+├── Low cardinality (< 1000 values) → PARTITION
+├── High cardinality (millions of values) → BUCKET
+└── No "index" concept in S3 data lakes!
+
+LAKE FORMATION — COMBINE FEATURES:
+├── Table/resource access at scale → Tag-based access
+├── + Hide columns → Add column-level security
+└── + Hide rows → Add row-level security (data filters)
+    (They stack! One question can need multiple features)
+

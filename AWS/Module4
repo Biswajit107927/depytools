@@ -1,0 +1,29 @@
+
+Cheat Sheet for Domain 4
+
+ENCRYPTION:
+├── At rest: SSE-S3, SSE-KMS, SSE-C, Redshift encryption
+├── In transit: TLS/HTTPS, SSL connections, VPN/IPSec
+├── Company manages keys: KMS CMK
+├── Keys NEVER leave HSM: CloudHSM
+└── Auto-rotation: KMS CMK supports annual auto-rotation
+
+VPC NETWORKING (NO INTERNET requirement):
+├── Need S3 access         → VPC Gateway Endpoint (free)
+├── Need DynamoDB access   → VPC Gateway Endpoint (free)
+├── Need Glue/KMS/STS etc. → VPC Interface Endpoint (PrivateLink)
+├── NAT Gateway            → PROVIDES internet (violates "no internet")
+└── Gateway Endpoint       → NO internet, traffic stays in AWS
+
+LAKE FORMATION:
+├── Overrides IAM (doesn't delete policies)
+├── Must disable "Use only IAM access control"
+├── Audit logs → WHO accessed WHICH table/column WHEN
+├── Best practice: IAM + Lake Formation together (defense-in-depth)
+└── Row/Column/Tag security all stack together
+
+AUDITING:
+├── Table-level access audit    → Lake Formation audit logs
+├── API call audit              → CloudTrail
+├── S3 object access            → S3 access logs or CloudTrail data events
+└── Query performance           → CloudWatch Logs

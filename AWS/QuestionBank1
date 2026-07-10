@@ -1,0 +1,82 @@
+Q1. A company needs to ingest real-time clickstream data from a web application at a rate of 500,000 records per second. The data must be transformed and loaded into Amazon S3 in near real-time (within 60 seconds). Which solution requires the LEAST operational overhead?
+
+A) Amazon Kinesis Data Streams → AWS Lambda → Amazon S3 B) Amazon Kinesis Data Firehose with data transformation using Lambda → Amazon S3 C) Amazon MSK (Kafka) → Spark Streaming on EMR → Amazon S3 D) AWS Glue Streaming ETL with Kinesis Data Streams → Amazon S3
+
+Q2. A data engineer needs to migrate an on-premises Oracle database to Amazon Aurora PostgreSQL with minimal downtime. The database is 2 TB and receives continuous writes. What is the BEST approach?
+
+A) Use AWS DMS with full load only, then switch over B) Use AWS DMS with full load followed by CDC (Change Data Capture) for ongoing replication C) Export the database to CSV, upload to S3, and use COPY command D) Use AWS SCT to convert the schema, then manually export/import data
+
+Q3. An AWS Glue ETL job processes daily files from S3. The job re-processes files that were already processed in previous runs, causing duplicates. What feature should the data engineer enable?
+
+A) Glue Data Catalog versioning B) Glue Job Bookmarks C) Glue Crawlers with schema change detection D) S3 event notifications with deduplication
+
+Q4. A company receives JSON files in S3 that vary in schema across different sources. The data engineer needs to catalog these files automatically and make them queryable via Athena. What is the MOST efficient approach?
+
+A) Manually create table definitions in the Glue Data Catalog B) Run AWS Glue Crawlers to automatically infer and catalog schemas C) Use Amazon Athena CREATE TABLE with SerDe for each schema variation D) Use AWS Lambda to parse JSON and write to a fixed schema table
+
+Q5. A streaming pipeline uses Kinesis Data Streams. During peak hours, some shards are receiving significantly more data than others, causing throttling. What should the data engineer do?
+
+A) Increase the retention period of the stream B) Use a random partition key to distribute data evenly across shards C) Enable enhanced fan-out for consumers D) Switch to Kinesis Data Firehose
+
+Q6. A data engineer is building an ETL pipeline using AWS Glue with PySpark. The source data contains nested JSON structures that need to be flattened. Which Glue feature is BEST suited for this?
+
+A) Glue Crawlers with classifiers B) Relationalize transform C) SelectFields transform D) Map transform with schema evolution
+
+Q7. A company wants to replicate data from multiple Amazon RDS instances across different regions into a centralized data lake on S3. The replication must be continuous with minimal latency. Which service should be used?
+
+A) AWS DataSync B) AWS DMS with CDC enabled for each source C) RDS automated backups with cross-region copy D) S3 Cross-Region Replication
+
+Q8. A data engineer needs to convert a large dataset (500 GB) from CSV format to Parquet for better query performance in Athena. The conversion must be cost-effective. What is the BEST approach?
+
+A) Use Amazon EMR with a Spark job to read CSV and write Parquet B) Use AWS Glue ETL job to read CSV and write Parquet C) Use Athena CTAS (CREATE TABLE AS SELECT) to convert the data D) Use AWS Lambda to process and convert files
+
+Q9. A Kinesis Data Firehose delivery stream is configured to deliver data to S3. The data engineer notices that small files (< 1 MB) are being created frequently, impacting downstream Athena query performance. What should be adjusted?
+
+A) Increase the buffer size and buffer interval in Firehose B) Enable S3 server-side encryption C) Add more shards to the source Kinesis Data Stream D) Enable Firehose data transformation with Lambda
+
+Q10. A data engineer is using AWS Glue to process data but encounters an error: "DynamicFrame has no column named 'customer_id'." The source schema has changed. How should the engineer handle schema evolution?
+
+A) Manually update the Glue Data Catalog table definition B) Use the ResolveChoice transform to handle ambiguous columns C) Enable schema evolution in the Glue job and use MergeSchema option D) Re-run the Glue Crawler to update the catalog, then rerun the job
+
+Q11. A company ingests IoT sensor data at 10,000 events per second. Each event is approximately 1 KB. The data must be available for real-time analytics within 1 second. Which ingestion solution is MOST appropriate?
+
+A) Kinesis Data Firehose → S3 → Athena B) Kinesis Data Streams → Kinesis Data Analytics (Apache Flink) → destination C) Amazon SQS → Lambda → DynamoDB D) AWS IoT Core → AWS IoT Rules → S3
+
+Q12. A Glue ETL job needs to read data from a JDBC source (Amazon RDS MySQL) with 200 million rows. The job is running slowly due to a single connection. How can the data engineer improve performance?
+
+A) Increase the DPU allocation for the Glue job B) Enable parallel reads by specifying a hashfield or hashexpression in the connection options C) Switch to Glue version 4.0 D) Use pushdown predicates to filter data at the source
+
+Q13. A data engineer needs to ingest data from a SaaS application (Salesforce) into S3 without writing custom code. Which AWS service is BEST suited?
+
+A) AWS DMS B) Amazon AppFlow C) AWS Glue with a custom connector D) Amazon Kinesis Data Firehose
+
+Q14. An EMR cluster running Spark jobs writes output in Parquet format to S3. The data engineer notices that the output contains thousands of small files (< 5 MB each). What is the BEST way to address this?
+
+A) Increase the number of core nodes in the EMR cluster B) Use coalesce() or repartition() before writing to reduce the number of output files C) Enable EMRFS consistent view D) Switch the output format from Parquet to ORC
+
+Q15. A data pipeline uses AWS Glue to transform data and write it to S3 in Parquet format partitioned by date. Downstream consumers using Athena report that new partitions are not visible. What is the MOST likely cause and fix?
+
+A) The Parquet files are corrupted — re-run the Glue job B) New partitions need to be registered in the Glue Data Catalog — run MSCK REPAIR TABLE or use a Glue Crawler C) Athena query cache is stale — clear the cache D) S3 eventual consistency is causing delays — enable strong consistency
+
+#
+
+
+Correct Answer
+
+
+Key Reasoning
+Q1	B) Kinesis Firehose + Lambda → S3	"Least operational overhead" = fully managed/serverless
+Q2	B) DMS with full load + CDC	Minimal downtime migration with continuous replication
+Q3	B) Glue Job Bookmarks	Tracks previously processed files to avoid reprocessing
+Q4	B) Glue Crawlers	Auto-infers schema and registers in Data Catalog
+Q5	B) Random partition key	Hot shards = uneven distribution = fix the partition key
+Q6	B) Relationalize transform	Flattens nested JSON/structs into relational tables
+Q7	B) DMS with CDC	Source is RDS (database), not S3 — need DMS for DB→S3
+Q8	B) Glue ETL job	Serverless, cost-effective for format conversion at scale
+Q9	A) Increase buffer size/interval	Larger buffers = fewer, bigger files in S3
+Q10	D) Re-run Crawler + rerun job	Catalog is out of sync with actual source schema
+Q11	B) Kinesis Streams → Kinesis Analytics (Flink)	"Within 1 second" = true real-time = Flink
+Q12	B) hashfield/hashexpression	Parallelizes JDBC reads across multiple connections
+Q13	B) Amazon AppFlow	Purpose-built for SaaS integration without code
+Q14	B) coalesce()/repartition()	Reduces output partitions = fewer, larger files
+Q15	B) MSCK REPAIR TABLE / Crawler	New partitions must be registered in the Data Catalog
