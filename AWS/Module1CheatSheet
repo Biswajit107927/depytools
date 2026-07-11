@@ -12,6 +12,10 @@ GLUE FIXES:
 ├── Too many small files on read?      → groupFiles/groupSize
 └── Exactly-once in streaming?         → Checkpointing
 
+GLUE BATCH vs STREAMING:
+├── Batch: Job Bookmarks (track processed files)
+└── Streaming: Checkpoints (track processed offsets)
+
 MIGRATION TO REDSHIFT:
 ├── Small dataset (< 1 TB)?           → DMS direct to Redshift
 └── Large dataset (multi-TB)?          → DMS → S3 → COPY command
@@ -25,11 +29,29 @@ FIREHOSE CHEAT SHEET:
 ├── Cannot read FROM S3 (ingestion only)
 └── Cannot write TO DynamoDB, RDS, or Kinesis
 
-GLUE BATCH vs STREAMING:
-├── Batch: Job Bookmarks (track processed files)
-└── Streaming: Checkpoints (track processed offsets)
+
 
 KINESIS THROUGHPUT (per shard):
 ├── Write: 1 MB/sec | 1,000 records/sec
 ├── Read (no fan-out): 2 MB/sec SHARED across all consumers
 └── Read (enhanced fan-out): 2 MB/sec PER consumer (dedicated)
+
+INGESTION SERVICE SELECTOR:
+├── SFTP/FTP files from partners  → AWS Transfer Family
+├── SaaS APIs (Salesforce, etc.)  → Amazon AppFlow
+├── On-prem file systems          → AWS DataSync
+├── Database migration            → AWS DMS
+├── Bulk offline transfer (TBs)   → AWS Snowball
+└── Streaming data delivery       → Kinesis Firehose
+
+S3 CONSISTENCY (POST-2020):
+└── S3 is NOW strongly consistent — EMRFS consistent view is OBSOLETE
+
+CONTROLLING OUTPUT FILE SIZE IN GLUE:
+├── maxRecordsPerFile → precise control by record count
+├── repartition(n) → approximate control by partition count
+└── Both are valid!
+
+FIREHOSE: DIRECT PUT vs KINESIS STREAMS → FIREHOSE:
+├── Only need delivery to S3/Redshift/OpenSearch? → Direct PUT (simpler)
+└── Need multiple consumers OR replay OR real-time analytics? → Streams → Firehose
