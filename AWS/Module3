@@ -31,3 +31,19 @@ EVENTBRIDGE DIRECT TARGETS (no Lambda needed):
 ├── Lambda ✅
 ├── Glue Workflows ✅
 └── Kinesis Data Streams ✅
+
+MONITORING — "LEAST EFFORT" ANSWERS:
+├── Detect missing data (real-time)  → EventBridge + CloudWatch metric + alarm
+├── S3 Storage Lens                  → Daily aggregate analytics only (NOT real-time)
+├── Centralized job monitoring       → Glue console built-in insights (already exists!)
+└── Don't over-engineer when native tools exist
+
+STEP FUNCTIONS PATTERNS:
+├── .sync         → Wait for job to complete
+├── .waitForTaskToken → Wait for external callback
+├── Retry         → Automatic retries with backoff
+├── Catch         → Error handling → fallback state
+├── Parallel      → Waits for ALL branches before proceeding
+└── Redrive       → Re-execute failed execution from point of failure
+
+
