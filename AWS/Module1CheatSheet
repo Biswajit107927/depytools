@@ -55,3 +55,248 @@ CONTROLLING OUTPUT FILE SIZE IN GLUE:
 FIREHOSE: DIRECT PUT vs KINESIS STREAMS → FIREHOSE:
 ├── Only need delivery to S3/Redshift/OpenSearch? → Direct PUT (simpler)
 └── Need multiple consumers OR replay OR real-time analytics? → Streams → Firehose
+
+AWS Glue DataBrew
+
+WHAT: Visual data preparation tool (no-code)
+WHO: Data analysts who don't write code
+WHEN: Data profiling, cleaning, normalization WITHOUT writing ETL scripts
+
+KEY FACTS:
+├── 250+ built-in transformations (no code)
+├── Data profiling (statistics, distributions, correlations)
+├── Recipe = saved set of transformations (reusable)
+├── NOT for complex joins or streaming — use Glue ETL for that
+├── Outputs to S3 in Parquet/CSV/JSON
+└── Think: "Excel-like data cleaning in the cloud"
+
+EXAM TRIGGER:
+├── "Data analyst needs to clean data WITHOUT coding" → DataBrew
+├── "Visual data preparation" → DataBrew
+├── "Profile data quality" → DataBrew OR Glue Data Quality
+└── "Complex ETL with joins/aggregations" → Glue ETL (NOT DataBrew)
+
+
+2. Amazon MSK (Managed Streaming for Apache Kafka)
+
+WHAT: Fully managed Apache Kafka on AWS
+WHEN: You already use Kafka OR need Kafka-specific features
+
+MSK vs KINESIS:
+┌──────────────────────┬────────────────────────────┐
+│ Amazon MSK (Kafka)   │ Kinesis Data Streams       │
+├──────────────────────┼────────────────────────────┤
+│ Open-source Kafka    │ AWS proprietary            │
+│ You manage topics,   │ AWS manages shards         │
+│ partitions, configs  │                            │
+│ Longer retention     │ Max 365 days retention     │
+│ (unlimited)          │                            │
+│ Kafka ecosystem      │ AWS ecosystem              │
+│ (Kafka Connect,      │ (Firehose, Lambda,         │
+│  Schema Registry)    │  Flink, Glue)              │
+│ More operational     │ Less operational overhead  │
+│ overhead             │                            │
+│ Existing Kafka apps  │ New AWS-native apps        │
+│ can migrate easily   │                            │
+└──────────────────────┴────────────────────────────┘
+
+EXAM TRIGGER:
+├── "Migrate existing Kafka workloads to AWS" → MSK
+├── "Kafka Connect / Kafka ecosystem" → MSK
+├── "Least operational overhead for streaming" → Kinesis
+├── "Open-source streaming" → MSK
+└── "Serverless streaming" → MSK Serverless OR Kinesis
+
+
+3. Data Modeling (Star Schema, Snowflake Schema, SCD)
+
+STAR SCHEMA:
+┌─────────────┐
+│ FACT TABLE  │ (measures: revenue, quantity, cost)
+│ fact_sales  │
+├─────────────┤
+│ date_key    │──→ dim_date
+│ product_key │──→ dim_product
+│ store_key   │──→ dim_store
+│ customer_key│──→ dim_customer
+│ revenue     │
+│ quantity    │
+└─────────────┘
+
+
+DIMENSION TABLES: Descriptive attributes (name, category, city)
+FACT TABLES: Numeric measures + foreign keys to dimensions
+
+STAR vs SNOWFLAKE:
+├── Star Schema: Dimensions are DENORMALIZED (flat, one level)
+│   └── Faster queries (fewer joins), more storage
+├── Snowflake Schema: Dimensions are NORMALIZED (multiple levels)
+│   └── Less storage, more joins (slower queries)
+└── Exam preference: Star schema for analytics/data warehouses
+
+SCD (SLOWLY CHANGING DIMENSIONS):
+├── Type 1: OVERWRITE old value (no history)
+│   └── Simple, loses history
+├── Type 2: ADD NEW ROW with effective dates (keeps full history)
+│   └── Columns: effective_start_date, effective_end_date, is_current
+│   └── Most common on exam — use Hudi/Delta Lake/Iceberg
+├── Type 3: ADD NEW COLUMN for previous value
+│   └── Keeps only one previous value (limited history)
+└── Type 6: Hybrid (1+2+3 combined)
+
+EXAM TRIGGER:
+├── "Track full history of dimension changes" → SCD Type 2
+├── "Only need current value" → SCD Type 1
+├── "Data warehouse schema for analytics" → Star Schema
+├── "Minimize storage in dimension tables" → Snowflake Schema
+└── "Implement SCD Type 2 in data lake" → Hudi/Delta Lake/Iceberg
+
+4. Amazon EMR Basics
+
+WHAT: Managed Hadoop/Spark/Hive/Presto cluster
+WHEN: Heavy processing (multi-TB), complex Spark jobs, existing Hadoop workloads
+
+CLUSTER TYPES:
+├── Transient: Spin up → process → terminate (cost-effective for batch)
+├── Persistent: Always running (for interactive queries, notebooks)
+└── EMR Serverless: No cluster management (like Glue but for Spark/Hive)
+
+NODE TYPES:
+├── Primary (Master): Coordinates cluster, runs YARN ResourceManager
+├── Core: Store data (HDFS) + run tasks
+└── Task: Run tasks ONLY (no HDFS) — good for Spot instances
+
+COST OPTIMIZATION:
+├── Core nodes: On-Demand (data loss risk with Spot)
+├── Task nodes: Spot instances (cheap, no data loss if terminated)
+├── Instance Fleets: Mix of instance types for availability
+└── Transient clusters: Cheapest for batch (no idle cost)
+
+STORAGE:
+├── HDFS: On-cluster storage (lost when cluster terminates)
+├── EMRFS (S3): Persistent, decoupled from cluster lifecycle
+└── Best practice: Use S3 (EMRFS) for data, HDFS only for temp/shuffle
+
+EMR vs GLUE:
+┌──────────────────────┬────────────────────────────┐
+│ EMR                  │ Glue                       │
+├──────────────────────┼────────────────────────────┤
+│ Full Spark control   │ Simplified Spark (DynamicFrame)│
+│ Custom libraries     │ Limited library support     │
+│ Multi-TB processing  │ Better for < 10 TB         │
+│ You manage cluster   │ Fully serverless           │
+│ Cheaper at scale     │ Cheaper for small jobs     │
+│ Hive/Presto/Flink    │ Only Spark (Python/Scala)  │
+│ More operational     │ Zero ops                   │
+└──────────────────────┴────────────────────────────┘
+
+EXAM TRIGGER:
+├── "Existing Hadoop/Spark workloads" → EMR
+├── "Need Hive/Presto/custom frameworks" → EMR
+├── "Least operational overhead for ETL" → Glue
+├── "Cost-effective batch processing" → EMR transient + Spot
+├── "Serverless Spark without cluster" → EMR Serverless OR Glue
+└── "Task nodes for cost savings" → Spot instances on task nodes
+
+5. Cost Optimization Patterns
+
+COMPUTE COST:
+├── Glue: Auto Scaling (enable it!) — scales DPUs down when idle
+├── EMR: Spot instances on task nodes (up to 90% savings)
+├── Redshift: Reserved Instances (1-3 year) for steady workloads
+├── Redshift Serverless: Pay per RPU-hour (bursty workloads)
+├── Athena: Pay per TB scanned → use Parquet + partitioning to reduce scan
+└── Lambda: Pay per invocation + duration (free tier: 1M requests/month)
+
+STORAGE COST:
+├── S3 lifecycle policies (Standard → IA → Glacier)
+├── S3 Intelligent-Tiering (auto-moves between tiers)
+├── Redshift: Concurrency Scaling (auto-adds clusters for burst queries)
+├── Delete/archive old data (retention policies)
+└── Compress data (Parquet/ORC vs CSV = 75% less storage)
+
+QUERY COST (ATHENA):
+├── Use columnar format (Parquet/ORC) — scan only needed columns
+├── Partition data — scan only needed partitions
+├── Compress data — less bytes scanned
+├── Use LIMIT — doesn't help cost (Athena scans full partition anyway)
+└── Workgroups with query cost limits (prevent runaway queries)
+
+EXAM TRIGGER:
+├── "Reduce Athena costs" → Parquet + partitioning + compression
+├── "Cost-effective EMR" → Spot on task nodes + transient clusters
+├── "Reduce Glue costs" → Auto Scaling + Job Bookmarks (avoid reprocessing)
+├── "Predictable Redshift workload" → Reserved Instances
+└── "Bursty Redshift workload" → Serverless or Concurrency Scaling
+
+6. AWS Macie
+
+WHAT: ML-powered service that discovers and protects sensitive data (PII) in S3
+WHEN: "Automatically discover PII/sensitive data across S3 buckets"
+
+KEY FACTS:
+├── Scans S3 buckets for PII (SSN, credit cards, emails, etc.)
+├── Uses ML + pattern matching
+├── Generates findings (alerts) when sensitive data is found
+├── Integrates with EventBridge for automated remediation
+├── Does NOT mask/encrypt data — only DISCOVERS it
+└── For masking → use Glue PII transform
+
+MACIE vs GLUE PII:
+├── Macie: DISCOVERS sensitive data (scanning, alerting)
+├── Glue PII transform: MASKS/REPLACES sensitive data (action)
+└── Often used together: Macie finds it → Glue masks it
+
+EXAM TRIGGER:
+├── "Discover PII across data lake" → Macie
+├── "Alert when sensitive data is found in S3" → Macie
+├── "Mask/replace PII for dev environment" → Glue PII transform
+└── "Classify sensitive data automatically" → Macie
+
+
+7. Data Privacy & Compliance
+
+GDPR (General Data Protection Regulation):
+├── Right to be forgotten → record-level deletes (Hudi/Delta Lake)
+├── Data residency → S3 bucket in specific region
+├── Data minimization → collect only what's needed
+├── Consent management → track consent in metadata
+└── Breach notification → CloudTrail + Macie + EventBridge alerts
+
+DATA RESIDENCY:
+├── Keep data in specific AWS region (e.g., eu-west-1 for EU data)
+├── S3 bucket region = data residency
+├── Redshift cluster region = data residency
+├── Use S3 bucket policies to DENY cross-region replication
+└── Use SCPs (Service Control Policies) to prevent resource creation outside allowed regions
+
+EXAM TRIGGER:
+├── "GDPR right to erasure" → Hudi/Delta Lake (record-level delete)
+├── "Data must stay in EU" → Deploy in eu-* region + SCP to prevent other regions
+├── "Discover PII for compliance" → Macie
+├── "Audit data access for compliance" → Lake Formation audit logs + CloudTrail
+└── "Encrypt PII at rest" → SSE-KMS with CMK
+
+8. Logging & Debugging
+
+GLUE JOB DEBUGGING:
+├── CloudWatch Logs: stdout/stderr from Glue jobs
+├── Glue continuous logging: Real-time driver/executor logs
+├── Spark UI: Available via Glue console (job run → Spark UI tab)
+│   └── Shows: stages, tasks, shuffle, memory usage, DAG
+├── Glue job metrics: CloudWatch metrics (bytes read/written, DPU usage)
+└── Common debug flow: Check CloudWatch Logs → Spark UI → metrics
+
+EMR DEBUGGING:
+├── YARN logs: Application-level logs
+├── Spark History Server: Post-job analysis
+├── Step logs: S3 location (configured at cluster launch)
+└── Ganglia: Cluster-level monitoring (CPU, memory, network)
+
+ATHENA DEBUGGING:
+├── Query execution details in Athena console
+├── CloudWatch metrics: query duration, data scanned
+├── Common issues: "HIVE_METASTORE_ERROR" → Glue Catalog schema mismatch
+└── "GENERIC_INTERNAL_ERROR" → usually file format issue or corrupt file
+
+
