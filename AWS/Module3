@@ -46,4 +46,1308 @@ STEP FUNCTIONS PATTERNS:
 ├── Parallel      → Waits for ALL branches before proceeding
 └── Redrive       → Re-execute failed execution from point of failure
 
+18. Glue Job Retry Strategies
+
+GLUE JOB CONFIGURATION:
+├── MaxRetries: Number of times to retry on failure (0-10)
+│   └── Default: 0 (no retry)
+├── Timeout: Max minutes before job is killed
+│   └── Default: 2880 minutes (48 hours)
+├── Job run notification: EventBridge on state change
+└── Error handling: Catch exceptions in script → log → continue or fail
+
+RETRY BEHAVIOR:
+├── Retry happens on ANY failure (OOM, network, code error)
+├── Each retry is a FULL re-execution (from scratch)
+├── Job Bookmarks help avoid reprocessing on retry
+│   └── Retry starts from where bookmarks left off
+├── MaxRetries = 3 means: 1 original + 3 retries = 4 total attempts
+└── Exponential backoff: NOT built-in (retries immediately)
+
+BEST PRACTICES:
+├── Set MaxRetries = 1-3 for transient failures (network, throttling)
+├── Set Timeout to 2x expected duration (catch runaway jobs)
+├── Use Job Bookmarks so retries don't reprocess old data
+├── Monitor with EventBridge: trigger alert after final retry fails
+└── For complex retry logic → use Step Functions (Retry with BackoffRate)
+
+STEP FUNCTIONS vs GLUE RETRIES:
+├── Simple retry → Glue MaxRetries (sufficient)
+├── Retry with exponential backoff → Step Functions Retry
+├── Retry only specific error types → Step Functions Catch
+├── Conditional retry (retry OOM but not code errors) → Step Functions
+└── Notification between retries → Step Functions + SNS
+
+EXAM TRIGGER:
+├── "Glue job fails intermittently due to network" → MaxRetries = 2-3
+├── "Job runs forever" → Set Timeout
+├── "Retry with exponential backoff" → Step Functions (not Glue native)
+├── "Don't reprocess data on retry" → Job Bookmarks
+└── "Alert after all retries exhausted" → EventBridge FAILED state → SNS
+
+19. EMR Auto-Scaling Policies
+
+EMR MANAGED SCALING (Recommended):
+├── Automatically adds/removes instances based on workload
+├── Set: MinimumCapacityUnits, MaximumCapacityUnits
+├── EMR decides WHEN and HOW MANY to add/remove
+├── Works with both instance groups and instance fleets
+├── Scales based on YARN metrics (pending containers, available memory)
+└── Simplest option — "least operational overhead"
+
+CUSTOM AUTO-SCALING (Legacy):
+├── You define CloudWatch metric + threshold + action
+├── Example: "If YARNMemoryAvailablePercentage < 15% for 5 min → add 5 nodes"
+├── More control but more complex
+└── Being replaced by Managed Scaling
+
+INSTANCE FLEETS vs INSTANCE GROUPS:
+├── Instance Groups: Single instance type per group (e.g., all m5.xlarge)
+├── Instance Fleets: Mix of instance types (m5.xlarge + m5.2xlarge + r5.xlarge)
+│   └── Better Spot availability (if one type unavailable, uses another)
+└── Fleets + Spot = best cost optimization
+
+SCALING BEST PRACTICES:
+├── Core nodes: Scale conservatively (they store HDFS data)
+├── Task nodes: Scale aggressively (no data loss on removal)
+├── Use Spot for task nodes (cheap + safe to terminate)
+├── Set MaximumCapacityUnits to control cost ceiling
+└── Transient clusters: Don't need auto-scaling (fixed duration)
+
+EXAM TRIGGER:
+├── "Auto-scale EMR with least effort" → Managed Scaling
+├── "Custom scaling based on specific metric" → Custom Auto-Scaling
+├── "Maximize Spot availability" → Instance Fleets
+├── "Scale task nodes for cost savings" → Task nodes on Spot + auto-scaling
+└── "Prevent runaway costs" → MaximumCapacityUnits limit
+
+20. CI/CD for Data Pipelines
+
+DEPLOYMENT PIPELINE FOR GLUE JOBS:
+├── Source: CodeCommit / GitHub (Glue scripts, configs)
+├── Build: CodeBuild (run unit tests, lint, package)
+├── Deploy: CodePipeline → CloudFormation/CDK (deploy Glue job definition)
+├── Test: Run integration tests in staging account
+└── Promote: Deploy to production account
+
+INFRASTRUCTURE AS CODE:
+├── CloudFormation: Define Glue jobs, crawlers, connections as YAML/JSON
+├── CDK (Cloud Development Kit): Define in Python/TypeScript → generates CloudFormation
+├── Terraform: Alternative IaC tool
+└── Benefit: Reproducible, version-controlled, auditable deployments
+
+TESTING STRATEGIES:
+├── Unit tests: Test transformation logic locally (pytest + mocked data)
+├── Integration tests: Run Glue job on small test dataset in staging
+├── Data quality tests: DQDL rules validate output after each run
+├── Schema tests: Verify output schema matches expected (Glue Catalog)
+└── Regression tests: Compare output with known-good baseline
+
+BLUE/GREEN DEPLOYMENT FOR DATA:
+├── Deploy new pipeline version alongside old one
+├── Run both on same input → compare outputs
+├── If new version passes validation → switch traffic
+├── Rollback: Point consumers back to old pipeline
+└── Use: Glue job versions, Step Functions versioned state machines
+
+EXAM TRIGGER:
+├── "Deploy Glue jobs across environments" → CodePipeline + CloudFormation
+├── "Version control for ETL scripts" → CodeCommit/GitHub
+├── "Test data pipeline before production" → Integration tests in staging
+├── "Reproducible infrastructure" → CloudFormation/CDK
+└── "Validate data quality after deployment" → Glue Data Quality (DQDL)
+
+21. CloudWatch Metrics for EMR & Glue
+
+GLUE JOB METRICS (CloudWatch):
+├── glue.driver.aggregate.bytesRead — total bytes read
+├── glue.driver.aggregate.recordsRead — total records read
+├── glue.driver.aggregate.shuffleBytesWritten — shuffle data
+├── glue.driver.jvm.heap.used — memory usage
+├── glue.driver.aggregate.elapsedTime — job duration
+├── glue.ALL.system.cpuSystemLoad — CPU utilization
+└── Enable: "Job metrics" checkbox in Glue job config
+
+EMR METRICS (CloudWatch):
+├── IsIdle — cluster has no running tasks (use for auto-termination)
+├── AppsRunning — number of active applications
+├── AppsPending — applications waiting for resources
+├── HDFSUtilization — HDFS disk usage percentage
+├── YARNMemoryAvailablePercentage — available memory for new containers
+├── ContainerPending — containers waiting (indicates need to scale)
+└── MRActiveNodes / CoreNodesRunning — node counts
+
+SPARK UI (Available for both Glue and EMR):
+├── Jobs tab: Overall job progress
+├── Stages tab: Individual stage details (shuffle, spill)
+├── Storage tab: Cached RDDs/DataFrames
+├── Executors tab: Memory/disk per executor
+├── SQL tab: Query plans (logical + physical)
+└── Access: Glue console → Job run → "Spark UI" tab
+
+EXAM TRIGGER:
+├── "Monitor Glue job memory usage" → CloudWatch metric: jvm.heap.used
+├── "Detect idle EMR cluster" → IsIdle metric → auto-terminate
+├── "Debug slow Spark stage" → Spark UI → Stages tab
+├── "EMR needs more resources" → ContainerPending metric → scale up
+└── "Track Glue job data volume" → bytesRead / recordsRead metrics
+
+
+My Assistant
+
+You've given me Q1-Q5. Let me score those first — but I need to flag Q5 immediately:
+Results: Q1-Q5
+Table
+
+#
+
+
+Your Answer
+
+
+Correct Answer
+
+
+...
+Q1	A) fact: KEY(customer_id); small dims: ALL	A) fact: KEY(customer_id); small dims: ALL	...
+Q2	B) Hudi with MERGE	B) Hudi with MERGE	...
+Q3	B) Redshift Spectrum	B) Redshift Spectrum	...
+Q4	A) fact_sales + dim_product + dim_date	A) fact_sales + dim_product + dim_date	...
+Q5	D) ANALYZE	C) VACUUM REINDEX	...
+
+Score so far: 4/5 (80%)
+Q5 Explanation — VACUUM REINDEX vs ANALYZE
+
+This is a critical distinction for interleaved sort keys:
+Table
+
+Operation
+
+
+What It Does
+
+
+When to Use
+VACUUM SORT ONLY	Re-sorts rows in compound sort key order	After loads on compound sort key tables
+VACUUM DELETE ONLY	Reclaims space from deleted rows	After many DELETEs
+VACUUM REINDEX	Rebuilds the interleaved sort key index	✅ After large loads on INTERLEAVED sort key tables
+ANALYZE	Updates table statistics for query planner	After loads (helps optimizer, NOT sort order)
+
+KEY RULE:
+├── COMPOUND sort key + new data loaded → VACUUM SORT ONLY
+├── INTERLEAVED sort key + new data loaded → VACUUM REINDEX
+├── Many deletes → VACUUM DELETE ONLY
+├── ANALYZE → updates statistics only (doesn't fix sort order!)
+└── ANALYZE helps query PLANNING, not query EXECUTION on unsorted data
+
+Why ANALYZE is wrong here:
+
+    The question says "query performance degrades after loading 100M rows"
+    This is a SORT problem (data is unsorted), not a statistics problem
+    ANALYZE updates statistics but doesn't re-sort or rebuild the index
+    Interleaved sort keys specifically need REINDEX (not just SORT) because the interleaving zones must be recalculated
+
+    💡 Memorize: Interleaved sort key + large load = VACUUM REINDEX (higher maintenance cost — this is the trade-off of interleaved vs compound)
+
+Now share your answers for Q6-Q15! 🎯
+
+Q6.B) Raw: S3 Glacier Instant Retrieval; Curated: S3 Standard; Aggregated: S3 Standard
+
+Q7. B) Create a GSI with PK: order_date (or a date-based partition) and SK: order_id
+
+Q8. A) Convert CSV to Parquet + add partitioning by date
+
+Q9.B) Star Schema — denormalized dimensions mean fewer joins, faster queries
+
+Q10.B) Run compaction (rewrite small files into larger ones) + expire old snapshots (metadata cleanup)
+
+My Assistant
+
+Here's your scorecard for Q6-Q10!
+Results: Q6-Q10
+Table
+
+#
+
+
+Your Answer
+
+
+Correct Answer
+
+
+...
+Q6	B) Raw: Glacier Instant Retrieval; Curated: Standard; Aggregated: Standard	C) Raw: S3 Standard-IA; Curated: Standard; Aggregated: Standard	...
+Q7	B) GSI with PK: order_date, SK: order_id	B) GSI with PK: order_date, SK: order_id	...
+Q8	A) Parquet + partitioning	A) Parquet + partitioning	...
+Q9	B) Star Schema — fewer joins, faster	B) Star Schema — fewer joins, faster	...
+Q10	B) Compaction + expire snapshots	B) Compaction + expire snapshots	...
+
+Score Q6-Q10: 4/5 (80%)
+Q6 Explanation — Why Standard-IA, not Glacier Instant Retrieval?
+
+This is a subtle but important distinction:
+Table
+
+Storage Class
+
+
+Min Storage Duration
+
+
+Retrieval Fee
+
+
+...
+S3 Standard-IA	30 days	Per-GB retrieval fee (low)	...
+Glacier Instant Retrieval	90 days	Per-GB retrieval fee (higher than IA)	...
+
+The question says: "Raw data is accessed only for reprocessing (once every few months)"
+
+Both seem valid, but here's the key:
+
+"Once every few months" for REPROCESSING means:
+├── When you DO access it, you read the ENTIRE 100 TB
+├── Glacier Instant Retrieval has HIGHER retrieval fees than Standard-IA
+├── 100 TB × higher retrieval fee = very expensive reprocessing
+├── Standard-IA: lower retrieval fee, still cheap storage
+└── For LARGE datasets accessed occasionally → Standard-IA is more cost-effective
+
+GLACIER INSTANT RETRIEVAL is best for:
+├── Small objects accessed rarely (e.g., old reports, backups)
+├── NOT for bulk reprocessing of 100 TB
+└── The 90-day minimum also means you pay for 90 days even if you delete earlier
+
+    💡 Exam rule of thumb:
+
+        Accessed monthly or for bulk reprocessing → Standard-IA
+        Accessed quarterly or less, small retrievals → Glacier Instant Retrieval
+        Accessed yearly, can wait hours → Glacier Flexible/Deep Archive
+        "Once every few months" + large dataset = Standard-IA (retrieval cost matters at scale)
+
+Now share your answers for Q11-Q15! 🎯
+
+Q11. A) Redshift provisioned cluster (always running)
+
+Q12. D) Sort key: (transaction_date, customer_id) compound; Distribution: KEY on customer_id
+
+Q13C) Keep latest in S3 Standard, move snapshots older than 90 days to Glacier
+
+Q14. B) AUTO REFRESH is eventually consistent — Redshift refreshes at its own schedule, not immediately after every load
+
+Q15.A) PK: user_id, SK: created_at; GSI with PK: status
+My Assistant
+
+Here's your scorecard for Q11-Q15!
+Results: Q11-Q15
+Table
+
+#
+
+
+Your Answer
+
+
+Correct Answer
+
+
+...
+Q11	A) Redshift provisioned (always running)	B) Amazon Athena (pay per query)	...
+Q12	D) Sort: (transaction_date, customer_id); Dist: KEY on customer_id	B) Sort: transaction_date; Dist: KEY on customer_id	...
+Q13	C) Latest in Standard, old snapshots to Glacier	B) Hudi/Iceberg with time-travel	...
+Q14	B) AUTO REFRESH is eventually consistent	B) AUTO REFRESH is eventually consistent	...
+Q15	A) PK: user_id, SK: created_at; GSI PK: status	C) PK: user_id, SK: created_at; GSI PK: status, SK: created_at	...
+
+Score Q11-Q15: 1/5 (20%)
+Full Round Score: 9/15 ✅ (60%)
+
+This round exposed some important gaps. Let me explain each one clearly:
+Q11 – Correct: B) Amazon Athena
+
+The key phrase: "unpredictably — sometimes 50 queries/day, sometimes zero queries for weeks"
+Table
+
+Option
+
+
+Cost Model
+
+
+For This Workload
+Redshift provisioned	Pay 24/7 whether you query or not	❌ Paying for weeks of zero usage
+Athena	Pay ONLY when you query ($5/TB scanned)	✅ Zero queries = zero cost
+EMR persistent	Pay 24/7	❌ Same problem as Redshift
+Redshift Serverless	Pay per RPU-hour (scales to zero)	🟠 Valid but more expensive per query than Athena for simple aggregations
+
+DECISION RULE:
+├── Predictable, heavy, frequent queries → Redshift provisioned
+├── Bursty but complex queries → Redshift Serverless
+├── Unpredictable, simple queries, long idle periods → Athena
+└── "Sometimes zero for weeks" = Athena wins (zero idle cost)
+
+    💡 Exam tip: "Unpredictable" or "sporadic" access + "cost-effective" = Athena (pay-per-query). Provisioned anything = waste during idle periods.
+
+Q12 – Correct: B) Sort key: transaction_date; Distribution: KEY on customer_id
+
+Your answer D) added customer_id to the compound sort key. Here's why that's suboptimal:
+
+THE QUERY:
+WHERE transaction_date BETWEEN '2026-01-01' AND '2026-06-30'  ← RANGE filter
+GROUP BY customer_id                                           ← Aggregation
+
+SORT KEY ANALYSIS:
+├── Sort on (transaction_date, customer_id):
+│   └── Works for the WHERE clause ✅
+│   └── But adding customer_id to sort key provides NO benefit
+│       because you're doing GROUP BY (aggregation), not ORDER BY
+│
+├── Sort on (transaction_date) ONLY:
+│   └── Works for the WHERE clause ✅
+│   └── Simpler, same performance for this query
+│   └── Less maintenance overhead
+│
+└── DISTRIBUTION on customer_id:
+    └── GROUP BY customer_id → all rows for same customer on same node
+    └── Reduces data shuffling during aggregation ✅
+
+The principle: Don't add columns to the sort key unless they're used in WHERE/JOIN filters. GROUP BY benefits from distribution, not sort key.
+
+    💡 Exam tip: Sort key = optimizes WHERE/range filters. Distribution key = optimizes GROUP BY/JOIN (co-locates data). Don't conflate the two.
+
+Q13 – Correct: B) Hudi/Iceberg with time-travel
+Table
+
+Approach
+
+
+Storage
+
+
+Query Any Past Date?
+
+
+...
+Daily snapshots (5 GB × 1095 days = 5.4 TB)	❌ Massive duplication	✅ Yes	...
+Snapshots + Glacier for old ones (C)	🟠 Still 5.4 TB total	🟡 Slow retrieval for old dates	...
+Hudi/Iceberg time-travel (B)	✅ Only stores CHANGES (incremental)	✅ Yes — query any point-in-time	...
+
+FULL SNAPSHOTS vs TIME-TRAVEL:
+├── 5 GB daily snapshot × 1095 days = 5.4 TB stored
+│
+├── Hudi/Iceberg time-travel:
+│   └── Stores only CHANGES (deltas) between versions
+│   └── If 1% changes daily: ~50 MB/day × 1095 = ~55 GB total
+│   └── 100x less storage!
+│   └── Can still query: "Show me the table AS OF 2024-03-15"
+│
+└── The question says "BEST balances cost and functionality"
+    └── Time-travel = same functionality, fraction of the cost
+
+    💡 Exam tip: "Historical state" + "cost-effective" + "query any point in time" = Hudi/Iceberg time-travel (NOT full snapshots + lifecycle policies)
+
+Q15 – Correct: C) PK: user_id, SK: created_at; GSI PK: status, SK: created_at
+
+Your answer A) was close but missed the SK on the GSI:
+
+ACCESS PATTERNS:
+1. Get item by user_id (90%)        → PK: user_id ✅
+2. Get items for user sorted by time (8%) → PK: user_id, SK: created_at ✅
+3. Get PENDING items across all users (2%) → GSI needed
+
+YOUR ANSWER (A): GSI with PK: status (no SK)
+├── Returns all PENDING items ✅
+├── But in WHAT ORDER? Random/unordered ❌
+├── If you want them sorted by created_at, you need SK on the GSI
+
+CORRECT (C): GSI with PK: status, SK: created_at
+├── Returns all PENDING items ✅
+├── Sorted by created_at automatically ✅
+├── Can query: "Get oldest 10 PENDING items" efficiently
+└── SK on GSI = free sorting within that partition
+
+    💡 Exam tip: Always add a Sort Key to GSIs when you need ordered results. A GSI without SK returns items in arbitrary order. Think: "What will I want to sort/filter by within this GSI partition?"
+
+Key Patterns to Memorize from This Round
+
+COST-EFFECTIVE QUERY ENGINE SELECTION:
+├── Heavy, predictable, complex → Redshift provisioned
+├── Bursty, complex → Redshift Serverless
+├── Sporadic, simple, long idle → Athena (zero idle cost)
+└── "Unpredictable" + "cost" = Athena
+
+SORT KEY vs DISTRIBUTION KEY:
+├── Sort key → optimizes WHERE / range filters / ORDER BY
+├── Distribution key → optimizes GROUP BY / JOIN (co-location)
+├── Don't add GROUP BY columns to sort key (no benefit)
+└── Keep sort key focused on filter columns only
+
+HISTORICAL DATA — SNAPSHOTS vs TIME-TRAVEL:
+├── Full daily snapshots = massive storage waste
+├── Hudi/Iceberg time-travel = stores only deltas
+├── Same functionality (query any past date)
+├── 10-100x less storage
+└── "Balance cost + functionality" = time-travel
+
+GSI DESIGN:
+├── Always include Sort Key if you need ordered results
+├── GSI without SK = unordered results
+├── PK = what you query BY; SK = how you SORT within results
+└── Think: "What's my access pattern?" → PK filters, SK sorts
+
+Updated Domain 2 Progress
+Table
+
+Round
+
+
+Score
+
+
+%
+
+
+...
+Round 1	8/15	53%	...
+Weak Areas (10)	7/10	70%	...
+Round 2	12/15	80%	...
+Round 3 (This)	9/15	60%	...
+
+The drop is because this round introduced new concepts (data modeling, Spectrum, Iceberg time-travel, cost-based decisions). These are now learned!
+
+Want another round to lock these in, or shall we move to a full mixed mock exam across all 4 domains? 🎯
+
+Howmany such cocepts are not covered ?
+My Assistant
+
+Here's the complete picture, Biswajit:
+Summary: Remaining Gaps
+Table
+
+Category
+
+
+Count
+
+
+Exam Risk
+❌ Uncovered topics	20	~5-9 questions
+🟡 Partially covered	12	~2-3 questions
+Total gaps	32	~7-12 questions out of 65
+But Here's the Good News 🎯
+
+Most of these are LOW-frequency topics (0-1 question each). Let me prioritize them by exam likelihood:
+🔴 HIGH Priority (likely to appear — learn these NOW)
+Table
+
+#
+
+
+Topic
+
+
+Domain
+
+
+...
+1	Kinesis resharding (split/merge)	D1	...
+2	repartition vs coalesce (Spark)	D1	...
+3	DMS task types (full-load, CDC, both)	D1	...
+4	Redshift federated queries	D2	...
+5	Lakehouse architecture concept	D2	...
+6	DynamoDB Streams + TTL	D2	...
+7	Parameter Store vs Secrets Manager	D3	...
+8	S3 Object Lock (WORM)	D4	...
+🟠 MEDIUM Priority (may appear)
+Table
+
+#
+
+
+Topic
+
+
+Domain
+9	Redshift WLM / Concurrency Scaling	D2
+10	OpenSearch — when to use	D2
+11	Glue Schema Registry	D1
+12	Lambda limitations in pipelines	D1
+13	CI/CD for data pipelines	D3
+14	S3 Select / Glacier Select	D2
+🟡 LOW Priority (unlikely, 1 question max)
+
+Neptune, Keyspaces, AQUA, Elastic Views, SCPs, tagging strategies, Container Insights
+Quick Crash Course — HIGH Priority Gaps
+
+Let me teach you the 8 high-priority topics right now:
+1. Kinesis Resharding (Split & Merge)
+
+SPLIT SHARD: 1 shard → 2 shards (doubles capacity)
+├── When: ProvisionedThroughputExceededException
+├── Doubles write capacity (1 MB/s → 2 MB/s total)
+├── Parent shard becomes read-only, expires after retention period
+└── Cannot split more than 1 shard at a time (sequential)
+
+MERGE SHARDS: 2 shards → 1 shard (halves capacity, saves cost)
+├── When: Over-provisioned (low utilization)
+├── Both parent shards become read-only
+└── New child shard handles all traffic
+
+KEY FACTS:
+├── Resharding is NOT instant — takes seconds to minutes
+├── UpdateShardCount API: scales to target shard count
+├── Can only double or halve at a time (e.g., 4→8→16, not 4→16)
+├── During resharding, consumers must handle parent→child transition
+└── KCL handles resharding automatically (rebalances workers)
+
+EXAM TRIGGER:
+├── "Throughput exceeded" → split shards (or increase shard count)
+├── "Reduce streaming costs" → merge underutilized shards
+├── "Scale from 10 to 40 shards" → requires multiple resharding operations
+└── "Consumer lag during scaling" → KCL auto-handles, but takes time
+
+2. Repartition vs Coalesce (Spark/Glue)
+
+REPARTITION(n):
+├── Increases OR decreases partitions
+├── Full shuffle (expensive — moves data across network)
+├── Use when: INCREASING partitions or need even distribution
+├── Example: repartition(100) → 100 evenly-sized output files
+
+COALESCE(n):
+├── Only DECREASES partitions (cannot increase)
+├── NO shuffle (cheap — just combines existing partitions)
+├── Use when: REDUCING partitions (e.g., 1000 small files → 10 larger files)
+├── May produce uneven partition sizes
+└── Example: coalesce(10) → 10 files (but sizes may vary)
+
+DECISION:
+├── Want fewer, larger files? → coalesce (cheaper)
+├── Want more files for parallelism? → repartition (must shuffle)
+├── Want evenly-sized output files? → repartition (guarantees even)
+├── "Reduce small files problem" → coalesce (no shuffle overhead)
+└── Writing to S3 with specific file count → repartition(n) or coalesce(n)
+
+GLUE EQUIVALENT:
+├── maxRecordsPerFile → controls output file size (Glue-native)
+├── groupFiles + groupSize → controls INPUT file grouping (reading)
+└── Both repartition and coalesce work in Glue PySpark scripts
+
+3. DMS Task Types
+
+THREE TASK TYPES:
+┌─────────────────────────┬──────────────────────────────────────┐
+│ Task Type               │ What It Does                         │
+├─────────────────────────┼──────────────────────────────────────┤
+│ Full Load ONLY          │ Migrates all existing data (one-time)│
+│ CDC ONLY                │ Captures only ongoing changes        │
+│                         │ (assumes full load already done)     │
+│ Full Load + CDC         │ Migrates existing data THEN          │
+│                         │ automatically switches to CDC        │
+│                         │ (most common for migrations)         │
+└─────────────────────────┴──────────────────────────────────────┘
+
+EXAM SCENARIOS:
+├── "One-time migration, no ongoing sync" → Full Load ONLY
+├── "Migrate + keep in sync until cutover" → Full Load + CDC
+├── "Already migrated, just need ongoing replication" → CDC ONLY
+├── "Zero-downtime migration" → Full Load + CDC (app stays on source until cutover)
+└── "Continuous replication to data lake" → CDC ONLY (to S3 in Parquet/CSV)
+
+DMS TABLE MAPPINGS:
+├── Selection rules: Which tables/schemas to include/exclude
+├── Transformation rules: Rename tables, rename columns, add columns
+├── Filter rules: Migrate only rows matching a condition
+└── Example: Migrate only tables starting with "prod_*" from schema "sales"
+
+4. Redshift Federated Queries
+
+WHAT: Query external databases (RDS/Aurora) directly FROM Redshift
+      without loading data into Redshift first
+
+HOW:
+├── Create external schema pointing to RDS/Aurora
+├── Query: SELECT * FROM external_schema.table JOIN local_table...
+├── Data stays in RDS — Redshift pulls it at query time
+└── Uses JDBC connection under the hood
+
+WHEN TO USE:
+├── Join Redshift warehouse data with live operational data in RDS
+├── Don't want to ETL operational data into Redshift
+├── Need real-time view of RDS data alongside warehouse data
+└── Small-to-medium RDS tables joined with large Redshift tables
+
+LIMITATIONS:
+├── Performance depends on RDS capacity (can overload source)
+├── Not suitable for large RDS tables (better to COPY into Redshift)
+├── Read-only (cannot write back to RDS)
+└── Supported: Aurora PostgreSQL, Aurora MySQL, RDS PostgreSQL, RDS MySQL
+
+EXAM TRIGGER:
+├── "Query RDS data from Redshift without ETL" → Federated Query
+├── "Join warehouse data with live operational data" → Federated Query
+├── "Real-time RDS data in Redshift queries" → Federated Query
+└── "Large RDS table + frequent queries" → COPY into Redshift (not federated)
+
+5. Lakehouse Architecture
+
+CONCEPT: Combines best of Data Lake + Data Warehouse
+
+DATA LAKE          DATA WAREHOUSE         LAKEHOUSE
+├── Cheap storage  ├── Fast queries       ├── Cheap storage (S3)
+├── Any format     ├── Schema enforced    ├── Open formats (Parquet/Iceberg)
+├── No schema      ├── ACID transactions  ├── ACID transactions (Hudi/Iceberg)
+├── Slow queries   ├── Expensive storage  ├── Fast queries (Athena/Spectrum)
+└── No governance  └── Vendor lock-in     ├── Schema enforcement
+                                          ├── Time-travel
+                                          └── Governance (Lake Formation)
+
+AWS LAKEHOUSE COMPONENTS:
+├── Storage: S3 (cheap, durable)
+├── Table format: Hudi / Iceberg / Delta Lake (ACID, time-travel)
+├── Query engines: Athena, Redshift Spectrum, EMR
+├── Catalog: Glue Data Catalog (unified metadata)
+├── Governance: Lake Formation (permissions, auditing)
+└── ETL: Glue, EMR (transformation)
+
+EXAM TRIGGER:
+├── "ACID transactions on S3" → Lakehouse (Hudi/Iceberg)
+├── "Combine data lake flexibility with warehouse reliability" → Lakehouse
+├── "Open format + governance + fast queries" → Lakehouse
+└── "Avoid vendor lock-in + warehouse features" → Lakehouse
+
+6. DynamoDB Streams + TTL
+
+DYNAMODB STREAMS:
+├── Captures item-level changes (INSERT, MODIFY, DELETE) in order
+├── Retention: 24 hours
+├── Consumers: Lambda (most common), KCL application
+├── Use cases:
+│   ├── Trigger Lambda on data change (event-driven)
+│   ├── Replicate to another table/region
+│   ├── Feed changes to OpenSearch for search
+│   └── Audit trail of all changes
+├── Stream view types:
+│   ├── KEYS_ONLY: Only the key attributes
+│   ├── NEW_IMAGE: Entire item after change
+│   ├── OLD_IMAGE: Entire item before change
+│   └── NEW_AND_OLD_IMAGES: Both before and after
+
+DYNAMODB TTL (Time to Live):
+├── Automatically deletes expired items (no cost for deletes!)
+├── Set a TTL attribute (epoch timestamp) on each item
+├── DynamoDB deletes items within 48 hours of expiry (not instant)
+├── Deleted items appear in DynamoDB Streams (as DELETE events)
+├── Use cases:
+│   ├── Session data (expire after 24 hours)
+│   ├── Temporary tokens
+│   ├── Log data retention (keep 30 days only)
+│   └── GDPR compliance (auto-delete after retention period)
+└── FREE — no WCU consumed for TTL deletes
+
+EXAM TRIGGER:
+├── "React to DynamoDB changes in real-time" → DynamoDB Streams + Lambda
+├── "Replicate DynamoDB to OpenSearch" → Streams → Lambda → OpenSearch
+├── "Auto-delete old items" → TTL
+├── "Session expiry" → TTL
+├── "Audit trail of all DynamoDB changes" → Streams (NEW_AND_OLD_IMAGES)
+└── "GDPR auto-deletion after X days" → TTL
+
+7. Parameter Store vs Secrets Manager
+
+┌─────────────────────────┬──────────────────────────────────────┐
+│ Systems Manager         │ Secrets Manager                      │
+│ Parameter Store         │                                      │
+├─────────────────────────┼──────────────────────────────────────┤
+│ Simple key-value store  │ Purpose-built for secrets            │
+│ Free tier (standard)    │ $0.40/secret/month                   │
+│ No auto-rotation        │ ✅ Auto-rotation (Lambda-based)      │
+│ Stores: configs, URLs,  │ Stores: passwords, API keys,        │
+│ feature flags, AMI IDs  │ DB credentials, tokens               │
+│ Max 8 KB per value      │ Max 64 KB per value                  │
+│ No cross-account native │ ✅ Cross-account access              │
+│ Encryption optional     │ Always encrypted (KMS)               │
+│ Versioning ✅           │ Versioning ✅                        │
+│ Hierarchical paths      │ Flat naming                          │
+│ (/app/prod/db-url)      │                                      │
+└─────────────────────────┴──────────────────────────────────────┘
+
+EXAM DECISION:
+├── "Auto-rotation of credentials" → Secrets Manager
+├── "Database password with rotation" → Secrets Manager
+├── "API key that must be rotated" → Secrets Manager
+├── "Application configuration values" → Parameter Store
+├── "Feature flags" → Parameter Store
+├── "Cost-sensitive, no rotation needed" → Parameter Store
+└── "Glue job needs DB password" → Secrets Manager (retrieve via boto3)
+
+8. S3 Object Lock (WORM)
+
+WHAT: Write Once, Read Many — prevents deletion/modification
+WHEN: Regulatory compliance (SEC, FINRA, healthcare)
+
+MODES:
+├── Governance Mode:
+│   ├── Most users can't delete/overwrite
+│   ├── Users with special permissions CAN override
+│   └── Use: Internal compliance (flexible)
+│
+├── Compliance Mode:
+│   ├── NOBODY can delete/overwrite (not even root account!)
+│   ├── Cannot be shortened or removed until retention expires
+│   └── Use: Regulatory requirements (SEC Rule 17a-4)
+│
+└── Legal Hold:
+    ├── Prevents deletion regardless of retention period
+    ├── Can be placed/removed by authorized users
+    └── Use: Litigation hold (preserve evidence)
+
+RETENTION PERIOD:
+├── Set per-object or as bucket default
+├── Specifies how long the object is protected
+└── After expiry: normal S3 behavior resumes
+
+REQUIREMENTS:
+├── Bucket must have versioning ENABLED
+├── Object Lock must be enabled at bucket creation (cannot add later)
+└── Works with all storage classes
+
+EXAM TRIGGER:
+├── "Regulatory compliance, data cannot be deleted" → Object Lock (Compliance mode)
+├── "SEC 17a-4 / FINRA" → Object Lock Compliance mode
+├── "Prevent accidental deletion but allow admin override" → Governance mode
+├── "Legal hold for investigation" → Legal Hold
+├── "WORM storage" → S3 Object Lock
+└── "Immutable audit logs" → Object Lock
+
+The Bottom Line
+Table
+
+If you memorize...
+
+
+Questions saved
+
+
+Time needed
+These 8 HIGH priority topics	5-8 questions	20 min reading
++ 6 MEDIUM priority topics	2-3 more questions	15 min reading
+Total	7-11 questions	35 min
+
+Even if you skip ALL remaining gaps, you'll still score ~86-92% based on your current performance. These gaps are insurance to push you to 95%+.
+What would you like to do next?
+
+Practice questions on gap topics
+
+Teach me the MEDIUM priority topics
+
+Full mock exam
+
+These topics are all for module 2 only ?
+My Assistant
+
+No, Biswajit! These 8 high-priority topics span ALL 4 domains. Let me clarify:
+Gap Topics by Domain
+Table
+
+#
+
+
+Topic
+
+
+Domain
+1	Kinesis resharding (split/merge)	Domain 1 (Ingestion)
+2	repartition vs coalesce (Spark)	Domain 1 (Ingestion)
+3	DMS task types (full-load, CDC, both)	Domain 1 (Ingestion)
+4	Redshift federated queries	Domain 2 (Data Store)
+5	Lakehouse architecture	Domain 2 (Data Store)
+6	DynamoDB Streams + TTL	Domain 2 (Data Store)
+7	Parameter Store vs Secrets Manager	Domain 3 (Operations)
+8	S3 Object Lock (WORM)	Domain 4 (Security)
+Distribution of ALL Gaps
+Table
+
+Domain
+
+
+Uncovered
+
+
+Partially Covered
+
+
+...
+Domain 1 (Ingestion)	5	3	...
+Domain 2 (Data Store)	7	4	...
+Domain 3 (Operations)	5	3	...
+Domain 4 (Security)	3	2	...
+
+Domain 2 has the most gaps (11 topics), which is why you scored 60% in the last round — it introduced concepts like Iceberg maintenance, Athena cost decisions, and time-travel vs snapshots that we hadn't drilled before.
+What Do You Want to Do Next?
+How would you like to proceed?
+
+Practice questions on the gap topics I just taught
+
+Teach me the remaining medium-priority gaps too
+
+Full mixed mock exam to test everything
+
+Another Domain 2 round to bring score back up
+
+I have 6 days. Lets cover everything. Low frequesncy one will be insurance
+My Assistant
+
+Let's cover everything in one comprehensive crash course, Biswajit. I'll teach all 32 gap topics organized for maximum retention. Here's the complete coverage:
+🎓 COMPLETE GAP COVERAGE — All Remaining Topics
+DOMAIN 1 GAPS (Ingestion & Transformation)
+1. Kinesis Resharding (Split & Merge) ✅ Already taught above
+2. Repartition vs Coalesce ✅ Already taught above
+3. DMS Task Types ✅ Already taught above
+4. Lambda in Data Pipelines
+
+LAMBDA LIMITATIONS:
+├── Max execution time: 15 minutes (hard limit)
+├── Max memory: 10 GB
+├── Max payload: 6 MB (synchronous), 256 KB (async)
+├── Max /tmp storage: 10 GB
+├── Concurrent executions: 1000 default (can increase)
+└── Cold start: First invocation takes longer
+
+LAMBDA IN DATA PIPELINES — USE CASES:
+├── ✅ Lightweight transforms (< 15 min processing)
+├── ✅ Event-driven triggers (S3 → Lambda → start Glue job)
+├── ✅ Kinesis/DynamoDB Streams consumer (micro-batch)
+├── ✅ Firehose data transformation (enrichment, format)
+├── ✅ Step Functions task (short-duration work)
+├── ❌ NOT for: Heavy ETL (> 15 min) → use Glue/EMR
+├── ❌ NOT for: Large datasets (> 10 GB) → use Glue/EMR
+└── ❌ NOT for: Stateful processing → use Flink
+
+LAMBDA + KINESIS:
+├── Lambda polls Kinesis (event source mapping)
+├── Processes in micro-batches (configurable batch size)
+├── Batch window: 0-300 seconds (collect records before invoking)
+├── Parallelization factor: 1-10 Lambda per shard
+├── On failure: bisect batch (retry half), max retry attempts
+└── Destination on failure: SQS/SNS dead-letter queue
+
+EXAM TRIGGER:
+├── "Lightweight transformation on streaming data" → Lambda
+├── "Processing takes 30 minutes" → NOT Lambda (use Glue/EMR)
+├── "React to S3 upload" → Lambda (or EventBridge → Step Functions)
+├── "Enrich Firehose records with DynamoDB lookup" → Lambda transform
+└── "15-minute timeout exceeded" → Switch to Glue/EMR
+
+5. Glue Schema Registry
+
+WHAT: Central schema management for streaming data (Avro, JSON Schema, Protobuf)
+WHERE: Works with Kinesis, MSK, Glue Streaming, Lambda
+
+WHY IT MATTERS:
+├── Producers and consumers agree on data format
+├── Schema evolution: add/remove fields safely
+├── Compatibility modes prevent breaking changes
+├── Reduces serialization/deserialization errors
+
+COMPATIBILITY MODES:
+├── BACKWARD: New schema can READ old data (add optional fields, remove fields)
+├── FORWARD: Old schema can READ new data (remove optional fields, add fields)
+├── FULL: Both backward AND forward compatible
+├── NONE: No compatibility checks (dangerous)
+└── BACKWARD is most common (new consumers read old + new data)
+
+HOW IT WORKS:
+├── Producer registers schema → gets schema version ID
+├── Producer embeds version ID in each record (header)
+├── Consumer reads version ID → fetches schema from registry
+├── Consumer deserializes using correct schema version
+└── If schema change violates compatibility → registration REJECTED
+
+EXAM TRIGGER:
+├── "Ensure schema compatibility in Kafka/Kinesis pipeline" → Glue Schema Registry
+├── "Prevent breaking changes in streaming data" → Schema Registry + BACKWARD compatibility
+├── "Schema evolution for Avro data" → Schema Registry
+├── "Producers and consumers use different schema versions" → Schema Registry handles it
+└── "Validate schema before publishing" → Schema Registry compatibility check
+
+6. DMS Table Mappings & Transformation Rules ✅ Already taught above
+7. Glue Elastic Views (Deprecated)
+
+STATUS: Deprecated/removed — UNLIKELY to appear on exam
+WHAT IT WAS: Automatically replicate data across data stores using SQL
+REPLACEMENT: Use DMS CDC or Glue ETL for cross-store replication
+
+IF IT APPEARS: Eliminate it as an answer choice (it's deprecated)
+
+DOMAIN 2 GAPS (Data Store Management)
+8. Redshift Federated Queries ✅ Already taught above
+9. Lakehouse Architecture ✅ Already taught above
+10. DynamoDB Streams + TTL ✅ Already taught above
+11. Redshift AQUA (Advanced Query Accelerator)
+
+WHAT: Hardware-accelerated cache for Redshift Spectrum/S3 queries
+HOW: Pushes filtering & aggregation to the storage layer (custom hardware)
+
+KEY FACTS:
+├── Accelerates queries that scan large amounts of S3 data
+├── Works automatically (no query changes needed)
+├── Available on RA3 node types only
+├── Reduces data movement between storage and compute
+├── Best for: scan-heavy queries with simple predicates (WHERE, LIKE, aggregations)
+└── NOT helpful for: complex joins between local tables
+
+EXAM TRIGGER:
+├── "Accelerate Redshift Spectrum queries" → AQUA (if RA3 nodes)
+├── "Reduce data movement in Redshift" → AQUA
+├── "RA3 nodes + scan-heavy workloads" → AQUA helps automatically
+└── Rarely tested — just know it exists and works with RA3
+
+12. Redshift Workload Management (WLM) & Concurrency Scaling
+
+WLM (Workload Management):
+├── Queues: Separate workloads into priority queues
+│   ├── Queue 1: "ETL" — 5 slots, 50% memory
+│   ├── Queue 2: "Analysts" — 10 slots, 30% memory
+│   └── Queue 3: "Dashboards" — 3 slots, 20% memory
+├── Slots: Max concurrent queries per queue
+├── Memory: % of cluster memory allocated per queue
+├── Timeout: Kill queries exceeding time limit
+└── Auto WLM: Redshift manages slots/memory automatically (RECOMMENDED)
+
+CONCURRENCY SCALING:
+├── Automatically adds temporary cluster capacity during spikes
+├── Handles burst read queries (not writes)
+├── Queries routed to scaling clusters transparently
+├── 1 hour free per day per cluster (then pay per-second)
+├── Enable per queue (not cluster-wide)
+└── Use case: Dashboard refresh at 9 AM causes query spike
+
+SHORT-DURATION QUERY ACCELERATION (SQA):
+├── Prioritizes short queries over long-running ones
+├── Short queries jump ahead in the queue
+├── Prevents analysts waiting behind a 2-hour ETL query
+└── Enable: SET max_execution_time for SQA threshold
+
+EXAM TRIGGER:
+├── "Separate ETL from analyst queries" → WLM queues
+├── "Query spike during business hours" → Concurrency Scaling
+├── "Short queries waiting behind long ETL" → SQA
+├── "Least operational overhead for workload management" → Auto WLM
+└── "Limit query runtime" → WLM timeout setting
+
+13. Amazon OpenSearch — When to Use
+
+WHAT: Managed Elasticsearch/OpenSearch for search & log analytics
+WHEN TO USE (in data engineering context):
+
+├── Full-text search across documents
+├── Log analytics (CloudWatch Logs → OpenSearch → Kibana dashboards)
+├── Real-time application monitoring
+├── Clickstream analytics with real-time dashboards
+└── Complement to data lake (search layer on top of S3 data)
+
+COMMON PIPELINE:
+Kinesis/Firehose → OpenSearch (real-time search/dashboards)
+DynamoDB Streams → Lambda → OpenSearch (search on DynamoDB data)
+S3 → Glue → OpenSearch (batch indexing for search)
+
+OpenSearch vs OTHER SERVICES:
+├── Need full-text search? → OpenSearch
+├── Need SQL analytics on structured data? → Redshift/Athena
+├── Need real-time log dashboards? → OpenSearch + Kibana
+├── Need BI dashboards on structured data? → QuickSight + Redshift
+└── Firehose destination? → ✅ Yes (direct delivery to OpenSearch)
+
+EXAM TRIGGER:
+├── "Search across log data" → OpenSearch
+├── "Real-time dashboards for application logs" → OpenSearch + Kibana
+├── "Full-text search on documents" → OpenSearch
+├── "Firehose → search/analytics" → Firehose → OpenSearch
+└── "Structured data analytics" → NOT OpenSearch (use Redshift/Athena)
+
+14. Amazon Neptune & Keyspaces (When to Use)
+
+AMAZON NEPTUNE (Graph Database):
+├── Use for: Relationship-heavy data (social networks, fraud detection,
+│            knowledge graphs, recommendation engines)
+├── Query languages: Gremlin (traversal), SPARQL (RDF)
+├── NOT for: Tabular analytics, time-series, simple key-value
+└── Exam trigger: "Relationships between entities", "graph queries",
+    "fraud ring detection", "social network analysis"
+
+AMAZON KEYSPACES (Cassandra-compatible):
+├── Use for: Existing Apache Cassandra workloads migrating to AWS
+├── Serverless, pay-per-request
+├── CQL (Cassandra Query Language) compatible
+├── NOT for: New applications (use DynamoDB instead — better AWS integration)
+└── Exam trigger: "Migrate Cassandra to AWS", "CQL compatible",
+    "existing Cassandra application"
+
+EXAM DECISION:
+├── "Graph relationships" → Neptune
+├── "Cassandra migration" → Keyspaces
+├── "Key-value / document store" → DynamoDB
+├── "Time-series data" → Amazon Timestream
+├── "Relational + ACID" → RDS / Aurora
+└── "Analytics on structured data" → Redshift
+
+15. S3 Select / Glacier Select
+
+WHAT: Query INSIDE an S3 object using SQL (without downloading entire object)
+FORMAT: Works on CSV, JSON, Parquet objects
+
+HOW IT WORKS:
+├── Normal S3: Download entire 5 GB file → filter in your app
+├── S3 Select: Send SQL → S3 filters server-side → returns only matching rows
+├── Saves: bandwidth, time, compute cost
+└── SQL subset: SELECT, WHERE, LIMIT (no JOIN, GROUP BY, subqueries)
+
+EXAMPLE:
+  SELECT s.name, s.age FROM S3Object s WHERE s.age > 30
+
+GLACIER SELECT:
+├── Same concept but for Glacier-stored objects
+├── Query archived data without restoring entire object
+├── Output goes to S3 (not returned directly)
+└── Takes minutes to hours (not instant like S3 Select)
+
+LIMITATIONS:
+├── Single object only (cannot query across multiple files)
+├── No JOINs, no aggregations (GROUP BY)
+├── Max object size: 256 GB (CSV/JSON), 1 TB (Parquet)
+├── For multi-file queries → use Athena instead
+└── For complex SQL → use Athena instead
+
+EXAM TRIGGER:
+├── "Filter rows from a single large CSV in S3 without downloading" → S3 Select
+├── "Reduce data transfer costs for simple filtering" → S3 Select
+├── "Query across multiple S3 files" → Athena (NOT S3 Select)
+├── "Complex aggregations on S3 data" → Athena (NOT S3 Select)
+└── "Query archived data in Glacier" → Glacier Select
+
+16. Data Lake Zones — Design Principles
+
+THREE-ZONE ARCHITECTURE:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  RAW ZONE (Landing/Bronze)                                  │
+│  ├── Original data as-is (JSON, CSV, logs)                 │
+│  ├── Immutable (never modify source data)                  │
+│  ├── Partitioned by ingestion date                         │
+│  ├── Storage: S3 Standard → lifecycle to IA/Glacier        │
+│  └── Purpose: Audit trail, reprocessing capability         │
+│                          ↓ ETL (Glue/EMR)                  │
+│                                                             │
+│  CURATED ZONE (Cleaned/Silver)                             │
+│  ├── Cleaned, validated, deduplicated                      │
+│  ├── Columnar format (Parquet/ORC)                         │
+│  ├── Schema enforced (Glue Catalog)                        │
+│  ├── Partitioned by business keys (date, region)           │
+│  ├── Storage: S3 Standard                                  │
+│  └── Purpose: Source of truth for analytics                │
+│                          ↓ Aggregation                     │
+│                                                             │
+│  AGGREGATED ZONE (Consumption/Gold)                        │
+│  ├── Pre-computed summaries, KPIs, materialized views      │
+│  ├── Optimized for specific use cases (dashboards, ML)     │
+│  ├── May be in Redshift, Athena views, or S3              │
+│  ├── Storage: S3 Standard (frequently accessed)            │
+│  └── Purpose: Fast consumption by analysts/dashboards      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+KEY PRINCIPLES:
+├── Raw is IMMUTABLE — never modify, always append
+├── Each zone has progressively higher data quality
+├── Governance (Lake Formation) applies at all zones
+├── Catalog (Glue) tracks metadata for all zones
+└── Access control: Raw (data engineers only), Curated (analysts), Aggregated (everyone)
+
+EXAM TRIGGER:
+├── "Where to store original unmodified data" → Raw zone
+├── "Source of truth for analytics" → Curated zone
+├── "Pre-computed dashboards" → Aggregated zone
+├── "Data quality improves as data moves through zones" → Bronze → Silver → Gold
+└── "Immutable audit trail" → Raw zone (never modify)
+
+DOMAIN 3 GAPS (Operations & Support)
+17. Parameter Store vs Secrets Manager ✅ Already taught above
+18. Glue Job Retry Strategies
+
+GLUE JOB CONFIGURATION:
+├── MaxRetries: Number of times to retry on failure (0-10)
+│   └── Default: 0 (no retry)
+├── Timeout: Max minutes before job is killed
+│   └── Default: 2880 minutes (48 hours)
+├── Job run notification: EventBridge on state change
+└── Error handling: Catch exceptions in script → log → continue or fail
+
+RETRY BEHAVIOR:
+├── Retry happens on ANY failure (OOM, network, code error)
+├── Each retry is a FULL re-execution (from scratch)
+├── Job Bookmarks help avoid reprocessing on retry
+│   └── Retry starts from where bookmarks left off
+├── MaxRetries = 3 means: 1 original + 3 retries = 4 total attempts
+└── Exponential backoff: NOT built-in (retries immediately)
+
+BEST PRACTICES:
+├── Set MaxRetries = 1-3 for transient failures (network, throttling)
+├── Set Timeout to 2x expected duration (catch runaway jobs)
+├── Use Job Bookmarks so retries don't reprocess old data
+├── Monitor with EventBridge: trigger alert after final retry fails
+└── For complex retry logic → use Step Functions (Retry with BackoffRate)
+
+STEP FUNCTIONS vs GLUE RETRIES:
+├── Simple retry → Glue MaxRetries (sufficient)
+├── Retry with exponential backoff → Step Functions Retry
+├── Retry only specific error types → Step Functions Catch
+├── Conditional retry (retry OOM but not code errors) → Step Functions
+└── Notification between retries → Step Functions + SNS
+
+EXAM TRIGGER:
+├── "Glue job fails intermittently due to network" → MaxRetries = 2-3
+├── "Job runs forever" → Set Timeout
+├── "Retry with exponential backoff" → Step Functions (not Glue native)
+├── "Don't reprocess data on retry" → Job Bookmarks
+└── "Alert after all retries exhausted" → EventBridge FAILED state → SNS
+
+19. EMR Auto-Scaling Policies
+
+EMR MANAGED SCALING (Recommended):
+├── Automatically adds/removes instances based on workload
+├── Set: MinimumCapacityUnits, MaximumCapacityUnits
+├── EMR decides WHEN and HOW MANY to add/remove
+├── Works with both instance groups and instance fleets
+├── Scales based on YARN metrics (pending containers, available memory)
+└── Simplest option — "least operational overhead"
+
+CUSTOM AUTO-SCALING (Legacy):
+├── You define CloudWatch metric + threshold + action
+├── Example: "If YARNMemoryAvailablePercentage < 15% for 5 min → add 5 nodes"
+├── More control but more complex
+└── Being replaced by Managed Scaling
+
+INSTANCE FLEETS vs INSTANCE GROUPS:
+├── Instance Groups: Single instance type per group (e.g., all m5.xlarge)
+├── Instance Fleets: Mix of instance types (m5.xlarge + m5.2xlarge + r5.xlarge)
+│   └── Better Spot availability (if one type unavailable, uses another)
+└── Fleets + Spot = best cost optimization
+
+SCALING BEST PRACTICES:
+├── Core nodes: Scale conservatively (they store HDFS data)
+├── Task nodes: Scale aggressively (no data loss on removal)
+├── Use Spot for task nodes (cheap + safe to terminate)
+├── Set MaximumCapacityUnits to control cost ceiling
+└── Transient clusters: Don't need auto-scaling (fixed duration)
+
+EXAM TRIGGER:
+├── "Auto-scale EMR with least effort" → Managed Scaling
+├── "Custom scaling based on specific metric" → Custom Auto-Scaling
+├── "Maximize Spot availability" → Instance Fleets
+├── "Scale task nodes for cost savings" → Task nodes on Spot + auto-scaling
+└── "Prevent runaway costs" → MaximumCapacityUnits limit
+
+20. CI/CD for Data Pipelines
+
+DEPLOYMENT PIPELINE FOR GLUE JOBS:
+├── Source: CodeCommit / GitHub (Glue scripts, configs)
+├── Build: CodeBuild (run unit tests, lint, package)
+├── Deploy: CodePipeline → CloudFormation/CDK (deploy Glue job definition)
+├── Test: Run integration tests in staging account
+└── Promote: Deploy to production account
+
+INFRASTRUCTURE AS CODE:
+├── CloudFormation: Define Glue jobs, crawlers, connections as YAML/JSON
+├── CDK (Cloud Development Kit): Define in Python/TypeScript → generates CloudFormation
+├── Terraform: Alternative IaC tool
+└── Benefit: Reproducible, version-controlled, auditable deployments
+
+TESTING STRATEGIES:
+├── Unit tests: Test transformation logic locally (pytest + mocked data)
+├── Integration tests: Run Glue job on small test dataset in staging
+├── Data quality tests: DQDL rules validate output after each run
+├── Schema tests: Verify output schema matches expected (Glue Catalog)
+└── Regression tests: Compare output with known-good baseline
+
+BLUE/GREEN DEPLOYMENT FOR DATA:
+├── Deploy new pipeline version alongside old one
+├── Run both on same input → compare outputs
+├── If new version passes validation → switch traffic
+├── Rollback: Point consumers back to old pipeline
+└── Use: Glue job versions, Step Functions versioned state machines
+
+EXAM TRIGGER:
+├── "Deploy Glue jobs across environments" → CodePipeline + CloudFormation
+├── "Version control for ETL scripts" → CodeCommit/GitHub
+├── "Test data pipeline before production" → Integration tests in staging
+├── "Reproducible infrastructure" → CloudFormation/CDK
+└── "Validate data quality after deployment" → Glue Data Quality (DQDL)
+
+21. CloudWatch Metrics for EMR & Glue
+
+GLUE JOB METRICS (CloudWatch):
+├── glue.driver.aggregate.bytesRead — total bytes read
+├── glue.driver.aggregate.recordsRead — total records read
+├── glue.driver.aggregate.shuffleBytesWritten — shuffle data
+├── glue.driver.jvm.heap.used — memory usage
+├── glue.driver.aggregate.elapsedTime — job duration
+├── glue.ALL.system.cpuSystemLoad — CPU utilization
+└── Enable: "Job metrics" checkbox in Glue job config
+
+EMR METRICS (CloudWatch):
+├── IsIdle — cluster has no running tasks (use for auto-termination)
+├── AppsRunning — number of active applications
+├── AppsPending — applications waiting for resources
+├── HDFSUtilization — HDFS disk usage percentage
+├── YARNMemoryAvailablePercentage — available memory for new containers
+├── ContainerPending — containers waiting (indicates need to scale)
+└── MRActiveNodes / CoreNodesRunning — node counts
+
+SPARK UI (Available for both Glue and EMR):
+├── Jobs tab: Overall job progress
+├── Stages tab: Individual stage details (shuffle, spill)
+├── Storage tab: Cached RDDs/DataFrames
+├── Executors tab: Memory/disk per executor
+├── SQL tab: Query plans (logical + physical)
+└── Access: Glue console → Job run → "Spark UI" tab
+
+EXAM TRIGGER:
+├── "Monitor Glue job memory usage" → CloudWatch metric: jvm.heap.used
+├── "Detect idle EMR cluster" → IsIdle metric → auto-terminate
+├── "Debug slow Spark stage" → Spark UI → Stages tab
+├── "EMR needs more resources" → ContainerPending metric → scale up
+└── "Track Glue job data volume" → bytesRead / recordsRead metrics
+
+22. Tagging Strategies for Cost Allocation
+
+WHAT: Apply key-value tags to AWS resources for cost tracking
+
+COMMON TAGS FOR DATA PIPELINES:
+├── Environment: dev / staging / prod
+├── Team: data-engineering / analytics / ml
+├── Project: customer-360 / revenue-pipeline
+├── CostCenter: CC-12345
+└── Owner: biswajit@company.com
+
+WHERE TO TAG:
+├── Glue jobs, crawlers, databases
+├── EMR clusters
+├── Redshift clusters
+├── S3 buckets
+├── Kinesis streams
+├── Step Functions state machines
+└── Lambda functions
+
+COST ALLOCATION:
+├── Activate tags in AWS Billing console
+├── Tags appear in Cost Explorer → filter/group by tag
+├── "How much does the revenue-pipeline cost?" → filter by Project tag
+├── Untagged resources → can't attribute costs (enforce tagging!)
+└── AWS Config rule: required-tags (enforce compliance)
+
+EXAM TRIGGER:
+├── "Track costs per project/team" → Resource tagging + Cost Explorer
+├── "Enforce tagging compliance" → AWS Config rule (required-tags)
+├── "Identify untagged resources" → AWS Config / Resource Groups
+└── "Chargeback to business units" → CostCenter tag + Cost Allocation Reports
 

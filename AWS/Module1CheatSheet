@@ -215,6 +215,8 @@ STORAGE COST:
 ├── Delete/archive old data (retention policies)
 └── Compress data (Parquet/ORC vs CSV = 75% less storage)
 
+
+
 QUERY COST (ATHENA):
 ├── Use columnar format (Parquet/ORC) — scan only needed columns
 ├── Partition data — scan only needed partitions
@@ -299,4 +301,237 @@ ATHENA DEBUGGING:
 ├── Common issues: "HIVE_METASTORE_ERROR" → Glue Catalog schema mismatch
 └── "GENERIC_INTERNAL_ERROR" → usually file format issue or corrupt file
 
+1. Kinesis Resharding (Split & Merge)
 
+SPLIT SHARD: 1 shard → 2 shards (doubles capacity)
+├── When: ProvisionedThroughputExceededException
+├── Doubles write capacity (1 MB/s → 2 MB/s total)
+├── Parent shard becomes read-only, expires after retention period
+└── Cannot split more than 1 shard at a time (sequential)
+
+MERGE SHARDS: 2 shards → 1 shard (halves capacity, saves cost)
+├── When: Over-provisioned (low utilization)
+├── Both parent shards become read-only
+└── New child shard handles all traffic
+
+KEY FACTS:
+├── Resharding is NOT instant — takes seconds to minutes
+├── UpdateShardCount API: scales to target shard count
+├── Can only double or halve at a time (e.g., 4→8→16, not 4→16)
+├── During resharding, consumers must handle parent→child transition
+└── KCL handles resharding automatically (rebalances workers)
+
+EXAM TRIGGER:
+├── "Throughput exceeded" → split shards (or increase shard count)
+├── "Reduce streaming costs" → merge underutilized shards
+├── "Scale from 10 to 40 shards" → requires multiple resharding operations
+└── "Consumer lag during scaling" → KCL auto-handles, but takes time
+
+2. Repartition vs Coalesce (Spark/Glue)
+
+REPARTITION(n):
+├── Increases OR decreases partitions
+├── Full shuffle (expensive — moves data across network)
+├── Use when: INCREASING partitions or need even distribution
+├── Example: repartition(100) → 100 evenly-sized output files
+
+COALESCE(n):
+├── Only DECREASES partitions (cannot increase)
+├── NO shuffle (cheap — just combines existing partitions)
+├── Use when: REDUCING partitions (e.g., 1000 small files → 10 larger files)
+├── May produce uneven partition sizes
+└── Example: coalesce(10) → 10 files (but sizes may vary)
+
+DECISION:
+├── Want fewer, larger files? → coalesce (cheaper)
+├── Want more files for parallelism? → repartition (must shuffle)
+├── Want evenly-sized output files? → repartition (guarantees even)
+├── "Reduce small files problem" → coalesce (no shuffle overhead)
+└── Writing to S3 with specific file count → repartition(n) or coalesce(n)
+
+GLUE EQUIVALENT:
+├── maxRecordsPerFile → controls output file size (Glue-native)
+├── groupFiles + groupSize → controls INPUT file grouping (reading)
+└── Both repartition and coalesce work in Glue PySpark scripts
+3. DMS Task Types
+
+THREE TASK TYPES:
+┌─────────────────────────┬──────────────────────────────────────┐
+│ Task Type               │ What It Does                         │
+├─────────────────────────┼──────────────────────────────────────┤
+│ Full Load ONLY          │ Migrates all existing data (one-time)│
+│ CDC ONLY                │ Captures only ongoing changes        │
+│                         │ (assumes full load already done)     │
+│ Full Load + CDC         │ Migrates existing data THEN          │
+│                         │ automatically switches to CDC        │
+│                         │ (most common for migrations)         │
+└─────────────────────────┴──────────────────────────────────────┘
+
+EXAM SCENARIOS:
+├── "One-time migration, no ongoing sync" → Full Load ONLY
+├── "Migrate + keep in sync until cutover" → Full Load + CDC
+├── "Already migrated, just need ongoing replication" → CDC ONLY
+├── "Zero-downtime migration" → Full Load + CDC (app stays on source until cutover)
+└── "Continuous replication to data lake" → CDC ONLY (to S3 in Parquet/CSV)
+
+DMS TABLE MAPPINGS:
+├── Selection rules: Which tables/schemas to include/exclude
+├── Transformation rules: Rename tables, rename columns, add columns
+├── Filter rules: Migrate only rows matching a condition
+└── Example: Migrate only tables starting with "prod_*" from schema "sales"
+4. Redshift Federated Queries
+
+WHAT: Query external databases (RDS/Aurora) directly FROM Redshift
+      without loading data into Redshift first
+
+HOW:
+├── Create external schema pointing to RDS/Aurora
+├── Query: SELECT * FROM external_schema.table JOIN local_table...
+├── Data stays in RDS — Redshift pulls it at query time
+└── Uses JDBC connection under the hood
+
+WHEN TO USE:
+├── Join Redshift warehouse data with live operational data in RDS
+├── Don't want to ETL operational data into Redshift
+├── Need real-time view of RDS data alongside warehouse data
+└── Small-to-medium RDS tables joined with large Redshift tables
+
+LIMITATIONS:
+├── Performance depends on RDS capacity (can overload source)
+├── Not suitable for large RDS tables (better to COPY into Redshift)
+├── Read-only (cannot write back to RDS)
+└── Supported: Aurora PostgreSQL, Aurora MySQL, RDS PostgreSQL, RDS MySQL
+
+EXAM TRIGGER:
+├── "Query RDS data from Redshift without ETL" → Federated Query
+├── "Join warehouse data with live operational data" → Federated Query
+├── "Real-time RDS data in Redshift queries" → Federated Query
+└── "Large RDS table + frequent queries" → COPY into Redshift (not federated)
+5. Lakehouse Architecture
+
+CONCEPT: Combines best of Data Lake + Data Warehouse
+
+DATA LAKE          DATA WAREHOUSE         LAKEHOUSE
+├── Cheap storage  ├── Fast queries       ├── Cheap storage (S3)
+├── Any format     ├── Schema enforced    ├── Open formats (Parquet/Iceberg)
+├── No schema      ├── ACID transactions  ├── ACID transactions (Hudi/Iceberg)
+├── Slow queries   ├── Expensive storage  ├── Fast queries (Athena/Spectrum)
+└── No governance  └── Vendor lock-in     ├── Schema enforcement
+                                          ├── Time-travel
+                                          └── Governance (Lake Formation)
+
+AWS LAKEHOUSE COMPONENTS:
+├── Storage: S3 (cheap, durable)
+├── Table format: Hudi / Iceberg / Delta Lake (ACID, time-travel)
+├── Query engines: Athena, Redshift Spectrum, EMR
+├── Catalog: Glue Data Catalog (unified metadata)
+├── Governance: Lake Formation (permissions, auditing)
+└── ETL: Glue, EMR (transformation)
+
+EXAM TRIGGER:
+├── "ACID transactions on S3" → Lakehouse (Hudi/Iceberg)
+├── "Combine data lake flexibility with warehouse reliability" → Lakehouse
+├── "Open format + governance + fast queries" → Lakehouse
+└── "Avoid vendor lock-in + warehouse features" → Lakehouse
+6. DynamoDB Streams + TTL
+
+DYNAMODB STREAMS:
+├── Captures item-level changes (INSERT, MODIFY, DELETE) in order
+├── Retention: 24 hours
+├── Consumers: Lambda (most common), KCL application
+├── Use cases:
+│   ├── Trigger Lambda on data change (event-driven)
+│   ├── Replicate to another table/region
+│   ├── Feed changes to OpenSearch for search
+│   └── Audit trail of all changes
+├── Stream view types:
+│   ├── KEYS_ONLY: Only the key attributes
+│   ├── NEW_IMAGE: Entire item after change
+│   ├── OLD_IMAGE: Entire item before change
+│   └── NEW_AND_OLD_IMAGES: Both before and after
+
+DYNAMODB TTL (Time to Live):
+├── Automatically deletes expired items (no cost for deletes!)
+├── Set a TTL attribute (epoch timestamp) on each item
+├── DynamoDB deletes items within 48 hours of expiry (not instant)
+├── Deleted items appear in DynamoDB Streams (as DELETE events)
+├── Use cases:
+│   ├── Session data (expire after 24 hours)
+│   ├── Temporary tokens
+│   ├── Log data retention (keep 30 days only)
+│   └── GDPR compliance (auto-delete after retention period)
+└── FREE — no WCU consumed for TTL deletes
+
+EXAM TRIGGER:
+├── "React to DynamoDB changes in real-time" → DynamoDB Streams + Lambda
+├── "Replicate DynamoDB to OpenSearch" → Streams → Lambda → OpenSearch
+├── "Auto-delete old items" → TTL
+├── "Session expiry" → TTL
+├── "Audit trail of all DynamoDB changes" → Streams (NEW_AND_OLD_IMAGES)
+└── "GDPR auto-deletion after X days" → TTL
+7. Parameter Store vs Secrets Manager
+
+┌─────────────────────────┬──────────────────────────────────────┐
+│ Systems Manager         │ Secrets Manager                      │
+│ Parameter Store         │                                      │
+├─────────────────────────┼──────────────────────────────────────┤
+│ Simple key-value store  │ Purpose-built for secrets            │
+│ Free tier (standard)    │ $0.40/secret/month                   │
+│ No auto-rotation        │ ✅ Auto-rotation (Lambda-based)      │
+│ Stores: configs, URLs,  │ Stores: passwords, API keys,        │
+│ feature flags, AMI IDs  │ DB credentials, tokens               │
+│ Max 8 KB per value      │ Max 64 KB per value                  │
+│ No cross-account native │ ✅ Cross-account access              │
+│ Encryption optional     │ Always encrypted (KMS)               │
+│ Versioning ✅           │ Versioning ✅                        │
+│ Hierarchical paths      │ Flat naming                          │
+│ (/app/prod/db-url)      │                                      │
+└─────────────────────────┴──────────────────────────────────────┘
+
+EXAM DECISION:
+├── "Auto-rotation of credentials" → Secrets Manager
+├── "Database password with rotation" → Secrets Manager
+├── "API key that must be rotated" → Secrets Manager
+├── "Application configuration values" → Parameter Store
+├── "Feature flags" → Parameter Store
+├── "Cost-sensitive, no rotation needed" → Parameter Store
+└── "Glue job needs DB password" → Secrets Manager (retrieve via boto3)
+
+8. S3 Object Lock (WORM)
+
+WHAT: Write Once, Read Many — prevents deletion/modification
+WHEN: Regulatory compliance (SEC, FINRA, healthcare)
+
+MODES:
+├── Governance Mode:
+│   ├── Most users can't delete/overwrite
+│   ├── Users with special permissions CAN override
+│   └── Use: Internal compliance (flexible)
+│
+├── Compliance Mode:
+│   ├── NOBODY can delete/overwrite (not even root account!)
+│   ├── Cannot be shortened or removed until retention expires
+│   └── Use: Regulatory requirements (SEC Rule 17a-4)
+│
+└── Legal Hold:
+    ├── Prevents deletion regardless of retention period
+    ├── Can be placed/removed by authorized users
+    └── Use: Litigation hold (preserve evidence)
+
+RETENTION PERIOD:
+├── Set per-object or as bucket default
+├── Specifies how long the object is protected
+└── After expiry: normal S3 behavior resumes
+
+REQUIREMENTS:
+├── Bucket must have versioning ENABLED
+├── Object Lock must be enabled at bucket creation (cannot add later)
+└── Works with all storage classes
+
+EXAM TRIGGER:
+├── "Regulatory compliance, data cannot be deleted" → Object Lock (Compliance mode)
+├── "SEC 17a-4 / FINRA" → Object Lock Compliance mode
+├── "Prevent accidental deletion but allow admin override" → Governance mode
+├── "Legal hold for investigation" → Legal Hold
+├── "WORM storage" → S3 Object Lock
+└── "Immutable audit logs" → Object Lock

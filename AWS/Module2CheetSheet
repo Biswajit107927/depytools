@@ -60,3 +60,210 @@ LAKE FORMATION — COMBINE FEATURES:
 └── + Hide rows → Add row-level security (data filters)
     (They stack! One question can need multiple features)
 
+KEY RULE:
+├── COMPOUND sort key + new data loaded → VACUUM SORT ONLY
+├── INTERLEAVED sort key + new data loaded → VACUUM REINDEX
+├── Many deletes → VACUUM DELETE ONLY
+├── ANALYZE → updates statistics only (doesn't fix sort order!)
+└── ANALYZE helps query PLANNING, not query EXECUTION on unsorted data
+
+SORT KEY vs DISTRIBUTION KEY:
+├── Sort key → optimizes WHERE / range filters / ORDER BY
+├── Distribution key → optimizes GROUP BY / JOIN (co-location)
+├── Don't add GROUP BY columns to sort key (no benefit)
+└── Keep sort key focused on filter columns only
+
+HISTORICAL DATA — SNAPSHOTS vs TIME-TRAVEL:
+├── Full daily snapshots = massive storage waste
+├── Hudi/Iceberg time-travel = stores only deltas
+├── Same functionality (query any past date)
+├── 10-100x less storage
+└── "Balance cost + functionality" = time-travel
+
+GSI DESIGN:
+├── Always include Sort Key if you need ordered results
+├── GSI without SK = unordered results
+├── PK = what you query BY; SK = how you SORT within results
+└── Think: "What's my access pattern?" → PK filters, SK sorts
+
+1. Redshift AQUA (Advanced Query Accelerator)
+
+WHAT: Hardware-accelerated cache for Redshift Spectrum/S3 queries
+HOW: Pushes filtering & aggregation to the storage layer (custom hardware)
+
+KEY FACTS:
+├── Accelerates queries that scan large amounts of S3 data
+├── Works automatically (no query changes needed)
+├── Available on RA3 node types only
+├── Reduces data movement between storage and compute
+├── Best for: scan-heavy queries with simple predicates (WHERE, LIKE, aggregations)
+└── NOT helpful for: complex joins between local tables
+
+EXAM TRIGGER:
+├── "Accelerate Redshift Spectrum queries" → AQUA (if RA3 nodes)
+├── "Reduce data movement in Redshift" → AQUA
+├── "RA3 nodes + scan-heavy workloads" → AQUA helps automatically
+└── Rarely tested — just know it exists and works with RA3
+12. Redshift Workload Management (WLM) & Concurrency Scaling
+
+WLM (Workload Management):
+├── Queues: Separate workloads into priority queues
+│   ├── Queue 1: "ETL" — 5 slots, 50% memory
+│   ├── Queue 2: "Analysts" — 10 slots, 30% memory
+│   └── Queue 3: "Dashboards" — 3 slots, 20% memory
+├── Slots: Max concurrent queries per queue
+├── Memory: % of cluster memory allocated per queue
+├── Timeout: Kill queries exceeding time limit
+└── Auto WLM: Redshift manages slots/memory automatically (RECOMMENDED)
+
+CONCURRENCY SCALING:
+├── Automatically adds temporary cluster capacity during spikes
+├── Handles burst read queries (not writes)
+├── Queries routed to scaling clusters transparently
+├── 1 hour free per day per cluster (then pay per-second)
+├── Enable per queue (not cluster-wide)
+└── Use case: Dashboard refresh at 9 AM causes query spike
+
+SHORT-DURATION QUERY ACCELERATION (SQA):
+├── Prioritizes short queries over long-running ones
+├── Short queries jump ahead in the queue
+├── Prevents analysts waiting behind a 2-hour ETL query
+└── Enable: SET max_execution_time for SQA threshold
+
+EXAM TRIGGER:
+├── "Separate ETL from analyst queries" → WLM queues
+├── "Query spike during business hours" → Concurrency Scaling
+├── "Short queries waiting behind long ETL" → SQA
+├── "Least operational overhead for workload management" → Auto WLM
+└── "Limit query runtime" → WLM timeout setting
+WHAT: Managed Elasticsearch/OpenSearch for search & log analytics
+WHEN TO USE (in data engineering context):
+
+├── Full-text search across documents
+├── Log analytics (CloudWatch Logs → OpenSearch → Kibana dashboards)
+├── Real-time application monitoring
+├── Clickstream analytics with real-time dashboards
+└── Complement to data lake (search layer on top of S3 data)
+
+COMMON PIPELINE:
+Kinesis/Firehose → OpenSearch (real-time search/dashboards)
+DynamoDB Streams → Lambda → OpenSearch (search on DynamoDB data)
+S3 → Glue → OpenSearch (batch indexing for search)
+
+OpenSearch vs OTHER SERVICES:
+├── Need full-text search? → OpenSearch
+├── Need SQL analytics on structured data? → Redshift/Athena
+├── Need real-time log dashboards? → OpenSearch + Kibana
+├── Need BI dashboards on structured data? → QuickSight + Redshift
+└── Firehose destination? → ✅ Yes (direct delivery to OpenSearch)
+
+EXAM TRIGGER:
+├── "Search across log data" → OpenSearch
+├── "Real-time dashboards for application logs" → OpenSearch + Kibana
+├── "Full-text search on documents" → OpenSearch
+├── "Firehose → search/analytics" → Firehose → OpenSearch
+└── "Structured data analytics" → NOT OpenSearch (use Redshift/Athena)
+
+14. Amazon Neptune & Keyspaces (When to Use)
+
+AMAZON NEPTUNE (Graph Database):
+├── Use for: Relationship-heavy data (social networks, fraud detection,
+│            knowledge graphs, recommendation engines)
+├── Query languages: Gremlin (traversal), SPARQL (RDF)
+├── NOT for: Tabular analytics, time-series, simple key-value
+└── Exam trigger: "Relationships between entities", "graph queries",
+    "fraud ring detection", "social network analysis"
+
+AMAZON KEYSPACES (Cassandra-compatible):
+├── Use for: Existing Apache Cassandra workloads migrating to AWS
+├── Serverless, pay-per-request
+├── CQL (Cassandra Query Language) compatible
+├── NOT for: New applications (use DynamoDB instead — better AWS integration)
+└── Exam trigger: "Migrate Cassandra to AWS", "CQL compatible",
+    "existing Cassandra application"
+
+EXAM DECISION:
+├── "Graph relationships" → Neptune
+├── "Cassandra migration" → Keyspaces
+├── "Key-value / document store" → DynamoDB
+├── "Time-series data" → Amazon Timestream
+├── "Relational + ACID" → RDS / Aurora
+└── "Analytics on structured data" → Redshift
+15. S3 Select / Glacier Select
+
+WHAT: Query INSIDE an S3 object using SQL (without downloading entire object)
+FORMAT: Works on CSV, JSON, Parquet objects
+
+HOW IT WORKS:
+├── Normal S3: Download entire 5 GB file → filter in your app
+├── S3 Select: Send SQL → S3 filters server-side → returns only matching rows
+├── Saves: bandwidth, time, compute cost
+└── SQL subset: SELECT, WHERE, LIMIT (no JOIN, GROUP BY, subqueries)
+
+EXAMPLE:
+  SELECT s.name, s.age FROM S3Object s WHERE s.age > 30
+
+GLACIER SELECT:
+├── Same concept but for Glacier-stored objects
+├── Query archived data without restoring entire object
+├── Output goes to S3 (not returned directly)
+└── Takes minutes to hours (not instant like S3 Select)
+
+LIMITATIONS:
+├── Single object only (cannot query across multiple files)
+├── No JOINs, no aggregations (GROUP BY)
+├── Max object size: 256 GB (CSV/JSON), 1 TB (Parquet)
+├── For multi-file queries → use Athena instead
+└── For complex SQL → use Athena instead
+
+EXAM TRIGGER:
+├── "Filter rows from a single large CSV in S3 without downloading" → S3 Select
+├── "Reduce data transfer costs for simple filtering" → S3 Select
+├── "Query across multiple S3 files" → Athena (NOT S3 Select)
+├── "Complex aggregations on S3 data" → Athena (NOT S3 Select)
+└── "Query archived data in Glacier" → Glacier Select
+
+16. Data Lake Zones — Design Principles
+
+THREE-ZONE ARCHITECTURE:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  RAW ZONE (Landing/Bronze)                                  │
+│  ├── Original data as-is (JSON, CSV, logs)                 │
+│  ├── Immutable (never modify source data)                  │
+│  ├── Partitioned by ingestion date                         │
+│  ├── Storage: S3 Standard → lifecycle to IA/Glacier        │
+│  └── Purpose: Audit trail, reprocessing capability         │
+│                          ↓ ETL (Glue/EMR)                  │
+│                                                             │
+│  CURATED ZONE (Cleaned/Silver)                             │
+│  ├── Cleaned, validated, deduplicated                      │
+│  ├── Columnar format (Parquet/ORC)                         │
+│  ├── Schema enforced (Glue Catalog)                        │
+│  ├── Partitioned by business keys (date, region)           │
+│  ├── Storage: S3 Standard                                  │
+│  └── Purpose: Source of truth for analytics                │
+│                          ↓ Aggregation                     │
+│                                                             │
+│  AGGREGATED ZONE (Consumption/Gold)                        │
+│  ├── Pre-computed summaries, KPIs, materialized views      │
+│  ├── Optimized for specific use cases (dashboards, ML)     │
+│  ├── May be in Redshift, Athena views, or S3              │
+│  ├── Storage: S3 Standard (frequently accessed)            │
+│  └── Purpose: Fast consumption by analysts/dashboards      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+KEY PRINCIPLES:
+├── Raw is IMMUTABLE — never modify, always append
+├── Each zone has progressively higher data quality
+├── Governance (Lake Formation) applies at all zones
+├── Catalog (Glue) tracks metadata for all zones
+└── Access control: Raw (data engineers only), Curated (analysts), Aggregated (everyone)
+
+EXAM TRIGGER:
+├── "Where to store original unmodified data" → Raw zone
+├── "Source of truth for analytics" → Curated zone
+├── "Pre-computed dashboards" → Aggregated zone
+├── "Data quality improves as data moves through zones" → Bronze → Silver → Gold
+└── "Immutable audit trail" → Raw zone (never modify)

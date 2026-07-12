@@ -1,0 +1,515 @@
+## DOMAIN 1: DATA INGESTION & TRANSFORMATION (34%)
+
+### Kinesis Decision Matrix
+
+| Scenario | Service |
+|----------|---------|
+| Just deliver data A → B (S3/Redshift/OpenSearch) | Firehose (direct PUT) |
+| Sub-second real-time processing | Flink (Kinesis Data Analytics) |
+| Multiple independent consumers | Kinesis Data Streams + Enhanced Fan-Out |
+| Stateful processing (windows, joins, aggregations) | Flink |
+| Simple delivery + format conversion + partitioning | Firehose |
+
+### Kinesis Throughput Limits (Per Shard)
+
+| Direction | Limit |
+|-----------|-------|
+| Write (producer) | 1 MB/sec OR 1,000 records/sec |
+| Read — WITHOUT enhanced fan-out | 2 MB/sec SHARED across ALL consumers |
+| Read — WITH enhanced fan-out | 2 MB/sec PER consumer (dedicated, push-based) |
+| GetRecords API calls | Max 5 per second per shard |
+
+### Kinesis Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| ProvisionedThroughputExceededException (producer) | Increase shards (UpdateShardCount) |
+| Hot shard / uneven distribution | Fix partition key (producer-side issue) |
+| Consumer falling behind (high iterator age) | Scale consumer + increase retention period |
+| Need multiple consumers without fan-out bottleneck | Enable Enhanced Fan-Out |
+
+### Firehose — Complete Reference
+
+**Supported Destinations (ONLY these 5):**
+- ✅ Amazon S3
+- ✅ Amazon Redshift (via S3 intermediate)
+- ✅ Amazon OpenSearch Service
+- ✅ Splunk
+- ✅ HTTP Endpoints (custom)
+- ❌ NOT: DynamoDB, RDS, Kinesis, Lambda
+
+**Capabilities:**
+- ✅ Dynamic partitioning (JQ inline OR Lambda metadata)
+- ✅ Format conversion (JSON → Parquet/ORC via Glue Catalog schema)
+- ✅ Lambda transformation (enrichment, DynamoDB lookups)
+- ✅ Buffering (60-900 seconds interval, 1-128 MB size)
+- ❌ Cannot read FROM S3 (ingestion only)
+- ❌ Cannot do sub-second latency (min 60 sec buffer)
+
+**Format Conversion Rules:**
+- Schema = Glue Catalog table (strict contract)
+- Extra fields in incoming data → SILENTLY DROPPED
+- Missing fields in incoming data → Written as NULL
+- Does NOT auto-update the catalog
+- Does NOT fail on schema mismatch
+- Auto-converts compatible types (string "29.99" → double)
+
+**Error Handling:**
+- Failed records → S3 backup/error bucket
+- Successful records continue normally
+
+**Firehose vs Streams → Firehose:**
+- Only need delivery? → Direct PUT to Firehose (simpler, cheaper)
+- Need replay/multiple consumers/real-time analytics? → Streams → Firehose
+
+### Ingestion Service Selector
+
+| Source Type | Service |
+|-------------|---------|
+| SFTP/FTP files from partners | AWS Transfer Family |
+| SaaS APIs (Salesforce, Zendesk, ServiceNow) | Amazon AppFlow |
+| On-premises file systems | AWS DataSync |
+| Database migration (schema + data) | AWS DMS (+ SCT for heterogeneous) |
+| Bulk offline transfer (multi-TB) | AWS Snowball Edge |
+| Streaming data delivery | Kinesis Data Firehose |
+| Database schema conversion (stored procs, views) | AWS Schema Conversion Tool (SCT) |
+
+### AppFlow Triggers
+- Schedule-based (every X minutes/hours)
+- Event-based (webhooks from SaaS source)
+- On-demand (manual/API)
+
+### AWS DMS Patterns
+
+| Scenario | Approach |
+|----------|----------|
+| Small dataset to Redshift (< 1 TB) | DMS direct to Redshift |
+| Large dataset to Redshift (multi-TB) | DMS → S3 → COPY command |
+| Ongoing replication with current state | DMS CDC → S3 → Glue with Hudi (upsert/delete) |
+| Heterogeneous migration (SQL Server → Aurora) | SCT first, then DMS |
+
+### Glue ETL — Transforms & Fixes
+
+| Problem | Solution |
+|---------|----------|
+| Nested JSON → flat relational | Relationalize transform |
+| Column name/position mismatch | ApplyMapping (maps by name) |
+| Column data type conflicts | ResolveChoice transform |
+| Slow JDBC reads | hashfield / hashexpression (parallelism) |
+| Stale catalog (column not found) | Re-run Crawler |
+| Reprocessing old files (batch) | Enable Job Bookmarks |
+| Reprocessing records (streaming) | Configure Checkpoints (S3 location) |
+| Too many small files on read | groupFiles + groupSize |
+| OOM / "killed by YARN" | Switch to G.2X or G.4X workers (more memory) |
+| Disk space exceeded during shuffle | Switch to G.2X workers (more disk) |
+| Gradually increasing runtime (constant data) | Job Bookmarks broken — reprocessing! |
+| Control output file size | maxRecordsPerFile OR repartition(n) — BOTH valid |
+
+### Glue Streaming vs Batch
+
+| Feature | Batch | Streaming |
+|---------|-------|-----------|
+| Avoid reprocessing | Job Bookmarks | Checkpoints |
+| Window control | N/A | windowSize parameter |
+| Exactly-once | Job Bookmarks | Checkpointing |
+
+### Glue JDBC Parallelism
+
+| Config | What it does |
+|--------|--------------|
+| hashfield | Splits reads by hashing an existing column |
+| hashexpression | Splits reads using a custom expression (e.g., MOD(id, 20)) |
+| Pushdown predicates | Filters rows at source (NOT for parallelism) |
+
+### S3 Consistency (Post-December 2020)
+- S3 provides **strong read-after-write consistency** for ALL operations
+- EMRFS consistent view is OBSOLETE — no longer needed
+- FileNotFoundException due to eventual consistency NO LONGER OCCURS
+
+### Glue Crawler Schema Management
+- Schema change policy: "Add new columns only" prevents overwriting manual fixes
+- Column-level overrides protect manually corrected data types
+- Next Crawler run won't overwrite your corrections
+
+---
+
+## DOMAIN 2: DATA STORE MANAGEMENT (26%)
+
+### S3 Storage Class Decision
+
+| Access Pattern | Storage Class |
+|----------------|---------------|
+| Accessed daily/frequently | S3 Standard |
+| Accessed < 1x per month | S3 Standard-IA |
+| Unpredictable access pattern | S3 Intelligent-Tiering |
+| Archive (minutes retrieval) | Glacier Instant Retrieval |
+| Archive (hours retrieval) | Glacier Flexible Retrieval |
+| Deep archive (12+ hours OK) | Glacier Deep Archive |
+| Single-AZ, infrequent, reproducible | One Zone-IA |
+
+**Key Rules:**
+- Frequent access + retrieval fees = expensive → use Standard
+- "Rarely accessed" ≠ Glacier (if instant retrieval needed → Standard-IA)
+- Lifecycle policies automate transitions
+
+### Redshift Distribution Styles
+
+| Style | When to Use |
+|-------|-------------|
+| KEY | Join column with HIGH cardinality (millions of unique values) |
+| ALL | Small dimension tables (< 100K rows) — copied to every node |
+| EVEN | No clear join pattern, or when KEY causes skew |
+| AUTO | Let Redshift decide (good default) |
+
+**Skew Fix:** If KEY distribution is skewed (one value = 40% of data) → change to a HIGHER-CARDINALITY column (not EVEN — you lose join optimization)
+
+### Redshift Sort Keys
+
+| Type | Best For | Rule |
+|------|----------|------|
+| Compound | ONE dominant filter column | Must filter LEFT-TO-RIGHT in order |
+| Interleaved | Multiple equally-used filter columns | Any column combo works |
+
+**Compound Sort Key Rule (PHONE BOOK ANALOGY):**
+```
+Key: (A, B, C)
+WHERE A = ?              ✅ Uses sort key
+WHERE A = ? AND B = ?    ✅ Uses sort key
+WHERE B = ?              ❌ Skipped A — USELESS
+WHERE A = ? OR B = ?     ❌ OR breaks sort key
+ORDER BY B               ❌ Not globally sorted by B alone
+```
+
+**Trade-off:** Interleaved needs VACUUM REINDEX (higher maintenance)
+
+### Redshift COPY Best Practices
+- Split files so count = multiple of slices (e.g., 8 slices → 8, 16, 24 files)
+- GZIP files CANNOT be split for parallel loading — split before compressing
+- Single large GZIP file = slow (only one slice can read it)
+- Use manifest files for explicit file lists
+
+### Redshift Materialized Views
+- `AUTO REFRESH YES` → automatic refresh, zero effort
+- NOT enabled by default — must explicitly configure
+- Redshift decides when to refresh based on data changes
+
+### Redshift Data Sharing
+- Share data across Redshift clusters/accounts WITHOUT copying
+- Producer creates datashare → Consumer queries directly
+- Cross-account and cross-region supported
+
+### Redshift Enhanced VPC Routing
+- Forces ALL Redshift traffic (COPY, UNLOAD, Spectrum) through VPC
+- Required when "traffic must not traverse public internet"
+- Combine with VPC Gateway Endpoint for S3
+
+### Partitioning vs Bucketing
+
+| Technique | When to Use | Example |
+|-----------|-------------|---------|
+| Partition | Low cardinality (< 1000 values) | date, region, status |
+| Bucket | High cardinality (millions of values) | customer_id, user_id |
+
+**Partition Explosion Warning:**
+- 365 days × 24 hours × 200 countries = 1.75M partitions/year → TOO MANY
+- Solution: Bucket on high-cardinality columns instead
+
+### Athena Partition Projection
+- Eliminates Crawler/ALTER TABLE dependency
+- Athena calculates partitions mathematically (no Glue Catalog lookup)
+- Best for: predictable, sequential partitions (daily dates, hourly)
+- Handles millions of partitions without enumeration overhead
+
+### DynamoDB Key Design
+
+| Access Pattern | Key Design |
+|----------------|------------|
+| Get items by owner, sorted by time | PK: owner_id, SK: timestamp |
+| Get specific item by ID | PK: item_id |
+| Query by non-key attribute | Create GSI on that attribute |
+
+**GSI vs LSI:**
+- GSI: Different partition key, can be added anytime
+- LSI: Same partition key, different sort key, must be created at table creation
+
+### DynamoDB On-Demand Scaling
+- Scales to **2x previous peak** instantly
+- Beyond 2x within 30 minutes → THROTTLES
+- 10x spike from zero → WILL throttle
+- For predictable large spikes → use provisioned + auto-scaling
+
+### Small Files Problem
+- Cause: Many tiny files (< 128 MB) in S3
+- Impact: Slow Athena/Spark queries (overhead per file)
+- Fix: Compaction job (Glue/EMR) to merge into 128-512 MB files
+- Prevention: Firehose buffer size, Spark coalesce/repartition
+
+### Data Lake Upserts / SCD Type 2
+- Always use **Apache Hudi** or **Delta Lake**
+- Supports: merge, upsert, delete, time-travel
+- SCD Type 2: track history with effective start/end dates
+- Copy-on-Write (CoW): fast reads, slow writes
+- Merge-on-Read (MoR): fast writes, slower reads (good for high-update tables)
+
+### File Formats
+
+| Format | Best For |
+|--------|----------|
+| Parquet | Columnar queries (SELECT few columns from many) |
+| ORC | Similar to Parquet (Hive ecosystem) |
+| Avro | Schema evolution, row-based processing |
+| JSON | Raw/landing zone, human-readable |
+| CSV | Legacy, simple flat data |
+
+**Parquet advantage:** Column pruning — only reads columns you SELECT (huge cost/performance savings with Athena)
+
+---
+
+## DOMAIN 3: DATA OPERATIONS & SUPPORT (22%)
+
+### Step Functions Patterns
+
+| Pattern | Use Case |
+|---------|----------|
+| .sync | Start task and WAIT for completion |
+| .waitForTaskToken | Wait for external callback (human approval) |
+| Retry | Auto-retry with MaxAttempts, IntervalSeconds, BackoffRate |
+| Catch | Error handling → fallback state |
+| Parallel | Run branches simultaneously, wait for ALL to complete |
+| Map | Process items in a collection (loop) |
+| Choice | Conditional branching (if/else) |
+| TimeoutSeconds | Set generous timeout for variable-duration tasks |
+| Redrive | Re-execute failed execution from point of failure |
+
+**Trigger Step Functions from S3:**
+- EventBridge rule on S3 PutObject → Step Functions (DIRECT integration, no Lambda needed)
+
+### Airflow (MWAA)
+
+| Task | How |
+|------|-----|
+| Trigger Glue job | AwsGlueJobOperator (native, auto-polls for completion) |
+| Trigger EMR step | EmrAddStepsOperator + EmrStepSensor |
+| Trigger Redshift query | RedshiftSQLOperator |
+| Wait for S3 file | S3KeySensor |
+| Re-run failed tasks | "Clear" task instances (re-runs only cleared tasks) |
+| Install custom packages | requirements.txt in MWAA S3 bucket |
+| Connection issues | Check security group outbound rules (port 5439 for Redshift) |
+
+**Rule:** Always prefer native AWS operators over BashOperator/PythonOperator with CLI/boto3
+
+### Glue Job Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| OOM / "killed by YARN" | Insufficient memory per worker | G.2X or G.4X workers |
+| Disk space exceeded (shuffle) | Insufficient disk per worker | G.2X workers |
+| Gradually increasing runtime | Job Bookmarks broken | Fix/enable Job Bookmarks |
+| Job succeeds but empty output | Filter logic eliminating all records | Check transformation logic |
+| Connection refused | Target paused or security group changed | Check network/target status |
+| Streaming job not processing | Checkpoint stuck / retention expired | Reset checkpoint |
+
+### Monitoring & Alerting
+
+| Need | Solution |
+|------|----------|
+| Detect job FAILURE | EventBridge state change event (FAILED) → SNS |
+| Detect slow jobs | CloudWatch metric alarm on duration |
+| Detect missing data (real-time) | EventBridge S3 events → CloudWatch metric → alarm on zero |
+| Data quality validation | Glue Data Quality (DQDL rules) |
+| Centralized job monitoring | Glue console built-in insights (LEAST effort) |
+| SLA breach warning | Track start time + alarm before deadline |
+
+**Key Distinctions:**
+- S3 Storage Lens = daily aggregate analytics (NOT real-time)
+- EventBridge = real-time event detection
+- "LEAST effort" = use built-in native tools first
+
+### EventBridge Direct Targets (No Lambda Needed)
+- ✅ Step Functions
+- ✅ SNS
+- ✅ SQS
+- ✅ Lambda
+- ✅ Glue Workflows
+- ✅ Kinesis Data Streams
+- ✅ ECS Tasks
+
+### Pipeline Orchestration Best Practice
+- Never use time-based gaps between dependent steps
+- Always use orchestration (Step Functions / Airflow) with explicit dependencies
+- ETL starts ONLY after Crawler/previous step completes
+
+### Glue Workflow Triggers
+- Triggers must be in "ACTIVATED" state to fire
+- If Job A succeeds but Job B doesn't start → check trigger activation status
+
+---
+
+## DOMAIN 4: DATA SECURITY & GOVERNANCE (18%)
+
+### 🚨 VPC Endpoints (MEMORIZE — ONLY 2 GATEWAY ENDPOINTS EXIST)
+
+| Endpoint Type | Services | Cost |
+|---------------|----------|------|
+| **Gateway Endpoint** | **S3 and DynamoDB ONLY** | FREE |
+| **Interface Endpoint (PrivateLink)** | Everything else | Paid (hourly + per GB) |
+
+**Interface Endpoint services:** Glue, KMS, CloudWatch, STS, Secrets Manager, Kinesis, Redshift, ECR, etc.
+
+**"No internet access" requirement:**
+- NAT Gateway = PROVIDES internet (violates "no internet")
+- VPC Gateway Endpoint = NO internet, traffic stays in AWS network
+- Need S3 without internet → Gateway Endpoint
+- Need KMS without internet → Interface Endpoint
+
+### 🚨 KMS vs CloudHSM (MEMORIZE — MISSED TWICE)
+
+| Requirement | Solution |
+|-------------|----------|
+| "Company manages keys" | KMS Customer-Managed Key (CMK) |
+| "FIPS 140-2 Level 3" | **CloudHSM** |
+| "Exclusive/sole control of HSM" | **CloudHSM** |
+| "Key material never leaves HSM" | **CloudHSM** |
+| "Dedicated hardware" | **CloudHSM** |
+| "Auto-rotation of keys" | KMS CMK (annual rotation) |
+
+**Key difference:** KMS = shared multi-tenant HSM infrastructure. CloudHSM = dedicated single-tenant HSM YOU exclusively control.
+
+### 🚨 KMS Key Rotation (MEMORIZE)
+- Old data stays encrypted with OLD key material
+- KMS retains ALL old key versions indefinitely
+- New data uses new key material
+- NO automatic re-encryption of existing data
+- CMK ARN stays the same (no app changes needed)
+- This is SAFE — old key material is still protected by same IAM controls
+
+### 🚨 Lake Formation — Access Requirements (MEMORIZE)
+
+**For a role to access LF-governed resources, you need BOTH:**
+1. Lake Formation grant (SELECT/INSERT) on the table
+2. IAM permission: `lakeformation:GetDataAccess`
+
+**Missing either one = "Access Denied"**
+
+### Lake Formation — "Use Only IAM Access Control"
+- When ENABLED (default/legacy): IAM policies control access directly, LF is bypassed
+- When DISABLED (recommended): Lake Formation permissions take precedence
+- LF does NOT delete IAM policies — it overrides them for registered resources
+- Common issue: "Access Denied" even with LF grant → check if this setting is still enabled
+
+### Lake Formation Security Features
+
+| Need | Feature |
+|------|---------|
+| Control who accesses which tables | Table-level permissions OR Tag-based access |
+| Hide specific columns (PII) | Column-level permissions |
+| Hide specific rows (by value) | Row-level security (data filters) |
+| Manage permissions at scale (100s of tables) | Tag-based access control (LF-Tags) |
+| Audit who accessed what | Lake Formation audit logs (integrated with CloudTrail) |
+| Cross-account sharing | LF cross-account grants + RAM share + resource link |
+
+**They STACK:** One scenario can require multiple features (e.g., Tag-based + Row-level + Column-level)
+
+### Encryption — At Rest vs In Transit
+
+| Type | Mechanisms |
+|------|-----------|
+| **At Rest** | SSE-S3, SSE-KMS, SSE-C, Redshift cluster encryption, DynamoDB encryption |
+| **In Transit** | TLS/HTTPS endpoints, SSL JDBC connections, VPN/IPSec |
+
+**Common exam trick:** SSE-S3/SSE-KMS = at rest ONLY. For in-transit, you need HTTPS/TLS/SSL.
+
+### Defense-in-Depth
+- When both IAM + Lake Formation are valid individually → answer is "BOTH together"
+- AWS always recommends layered security
+- Look for "MOST granular control" → often means combining multiple mechanisms
+
+### Auditing — Which Log for What
+
+| Need | Log Source |
+|------|-----------|
+| Who accessed which TABLE/COLUMN | Lake Formation audit logs |
+| Who called which API | CloudTrail (Management Events) |
+| Who deleted/accessed S3 OBJECT | CloudTrail Data Events for S3 (must be enabled) |
+| S3 access patterns (IP, requester) | S3 server access logs |
+| Query execution details | CloudWatch Logs |
+
+### Secrets Management
+- API keys, DB passwords, credentials → **AWS Secrets Manager**
+- Supports automatic rotation
+- Retrieve in Glue via boto3
+- Never hardcode credentials in scripts
+
+### Data Masking / PII
+- Realistic fake data for dev/test → **Glue PII detection + masking transform**
+- Hide columns from users → Lake Formation column-level permissions
+- These are DIFFERENT use cases (masking creates fake data; permissions hide data)
+
+### Redshift Enhanced VPC Routing
+- Forces ALL Redshift traffic through VPC (COPY, UNLOAD, Spectrum)
+- Required for "no public internet" + Redshift scenarios
+- Combine with VPC Gateway Endpoint for S3
+
+### Cross-Account Patterns
+
+| Scenario | Solution |
+|----------|----------|
+| Share LF-governed tables | LF cross-account grants + RAM + resource link |
+| Share Redshift data | Redshift Data Sharing |
+| Share S3 data (simple) | S3 bucket policy + cross-account IAM role |
+| Glue job reads cross-account S3 | Glue role in Account A + S3 bucket policy in Account B |
+
+---
+
+## EXAM STRATEGY & TIPS
+
+### Key Phrases → Answers
+
+| If you see... | Think... |
+|---------------|----------|
+| "Least operational overhead" | Serverless/managed (Firehose, Athena, Serverless) |
+| "Least effort" | Use built-in native features first |
+| "No infrastructure management" | Athena > Redshift Serverless > EMR |
+| "Zero infrastructure" + "query S3" | Athena |
+| "Complex joins + fast + frequent" | Redshift (provisioned) |
+| "FIPS 140-2 Level 3" | CloudHSM |
+| "No internet access" | VPC Endpoints (NOT NAT Gateway) |
+| "Defense-in-depth" | Combine IAM + Lake Formation |
+| "Record-level deletes in data lake" | Hudi / Delta Lake |
+| "SCD Type 2" | Hudi / Delta Lake |
+| "Gradually increasing runtime" | Job Bookmarks broken |
+| "Killed by YARN" / OOM | Increase worker memory (G.2X) |
+| "Sub-second latency" | Flink (NOT Firehose) |
+| "Multiple consumers" | Kinesis Data Streams + Enhanced Fan-Out |
+| "Detect job failure" | EventBridge state change → SNS |
+| "Schema mismatch after Crawler" | Schema change policy + column overrides |
+
+### Common Traps to Avoid
+1. ❌ Don't add Kinesis Streams in front of Firehose unless you need multiple consumers/replay
+2. ❌ Don't choose Glacier for "rarely accessed" if instant retrieval is needed
+3. ❌ Don't choose EVEN distribution as first fix for skew (try higher-cardinality key first)
+4. ❌ Don't confuse Job Bookmarks (batch) with Checkpoints (streaming)
+5. ❌ Don't assume on-demand DynamoDB = unlimited instant scaling
+6. ❌ Don't choose NAT Gateway when "no internet" is required
+7. ❌ Don't assume KMS key rotation re-encrypts existing data
+8. ❌ Don't pick single features when the question needs multiple (LF row + column + tag)
+9. ❌ Don't choose S3 Storage Lens for real-time monitoring
+10. ❌ Don't forget `lakeformation:GetDataAccess` IAM permission
+
+---
+
+##  PERSONAL WEAK SPOTS (REVIEW DAILY)
+
+### 🔴 Critical (Missed 2+ times)
+1. **CloudHSM vs KMS** — "FIPS Level 3" or "exclusive HSM control" = CloudHSM
+2. **Gateway Endpoints** — ONLY S3 and DynamoDB. Everything else = Interface Endpoint
+3. **Compound Sort Key** — Must filter left-to-right. Skip leading column = useless
+4. **KMS Rotation** — No re-encryption. Old key material retained. New data uses new key.
+
+### 🟠 Medium (Missed once)
+5. **lakeformation:GetDataAccess** — Required IAM permission alongside LF grants
+6. **DynamoDB on-demand** — 2x previous peak limit, then throttles
+7. **Firehose format conversion** — Extra fields DROPPED (schema-strict)
+8. **Redshift AUTO REFRESH YES** — Not default, must configure
+9. **Partitioning vs Bucketing** — High cardinality = bucket, not partition
+

@@ -50,3 +50,145 @@ AUDITING:
    ├── KMS retains ALL old key versions (never deletes)
    ├── New data uses new key material
    └── NO automatic re-encryption of existing data
+
+  24. AWS Config (Compliance Monitoring)
+
+WHAT: Continuously monitors AWS resource configurations for compliance
+HOW: Records configuration changes + evaluates against rules
+
+KEY CONCEPTS:
+├── Configuration Recorder: Tracks all resource config changes
+├── Config Rules: Define desired state (managed or custom)
+│   ├── Managed rules: Pre-built (e.g., s3-bucket-encryption-enabled)
+│   ├── Custom rules: Lambda function evaluates compliance
+│   └── Triggers: On config change OR periodic (every 1/3/6/12/24 hours)
+├── Compliance Dashboard: Shows compliant vs non-compliant resources
+├── Remediation: Auto-fix non-compliant resources (SSM Automation)
+└── Configuration Timeline: History of all changes to a resource
+
+DATA ENGINEERING USE CASES:
+├── "S3 buckets must have encryption enabled" → Config rule
+├── "Redshift clusters must have encryption" → Config rule
+├── "All Glue jobs must have security configuration" → Config rule
+├── "DynamoDB tables must have encryption" → Config rule
+├── "Detect unencrypted resources" → Config compliance check
+└── "Auto-remediate: enable encryption if missing" → Config + SSM Automation
+
+AWS CONFIG vs CLOUDTRAIL:
+├── CloudTrail: WHO did WHAT (API calls, user actions)
+├── Config: WHAT is the current STATE of resources (configuration)
+├── CloudTrail: "Who deleted the S3 bucket?"
+├── Config: "Is the S3 bucket encrypted? Was it always encrypted?"
+└── Both complement each other for full governance
+
+EXAM TRIGGER:
+├── "Ensure all S3 buckets are encrypted" → AWS Config rule
+├── "Detect non-compliant resources" → AWS Config
+├── "Auto-remediate security violations" → Config + SSM Automation
+├── "Configuration change history" → AWS Config timeline
+├── "Who made the change?" → CloudTrail (not Config)
+└── "What is the current state?" → AWS Config (not CloudTrail)
+
+25. Service Control Policies (SCPs)
+
+WHAT: Organization-level policies that set MAXIMUM permissions
+WHERE: Applied to AWS Organization OUs (Organizational Units) or accounts
+WHO: Affects ALL users/roles in the target accounts (even root!)
+
+KEY FACTS:
+├── SCPs DON'T grant permissions — they set boundaries
+├── SCP + IAM: Effective permission = intersection of both
+├── Even if IAM allows it, SCP can DENY it
+├── Applied at OU level → affects all accounts in that OU
+└── Root account of member accounts IS affected by SCPs
+
+DATA ENGINEERING USE CASES:
+├── "Prevent creating resources outside eu-west-1" (data residency)
+│   └── SCP: Deny all actions where region ≠ eu-west-1
+├── "Prevent disabling CloudTrail" (audit protection)
+│   └── SCP: Deny cloudtrail:StopLogging
+├── "Prevent deleting S3 buckets in production"
+│   └── SCP: Deny s3:DeleteBucket in prod OU
+├── "Restrict which KMS keys can be used"
+│   └── SCP: Deny kms:CreateKey unless specific conditions
+└── "Prevent leaving the organization"
+    └── SCP: Deny organizations:LeaveOrganization
+
+SCP vs IAM POLICY vs LAKE FORMATION:
+├── SCP: Guardrails at organization level (what's POSSIBLE)
+├── IAM: Permissions at user/role level (what's ALLOWED)
+├── Lake Formation: Data-level permissions (what DATA is accessible)
+└── All three can coexist — most restrictive wins
+
+EXAM TRIGGER:
+├── "Prevent resources outside specific region" → SCP
+├── "Organization-wide security guardrail" → SCP
+├── "Even admin cannot bypass" → SCP (affects all, including admins)
+├── "Data residency enforcement" → SCP (region restriction)
+└── "Individual user permissions" → IAM (not SCP)
+
+26. AWS RAM (Resource Access Manager)
+
+WHAT: Share AWS resources across accounts without duplication
+USED WITH: Lake Formation, Redshift, RAM-compatible resources
+
+LAKE FORMATION + RAM (Cross-Account Sharing):
+├── Step 1: Account A (producer) grants LF permissions to Account B
+├── Step 2: LF uses RAM to share the Glue Catalog resource
+├── Step 3: Account B creates a RESOURCE LINK to the shared table
+├── Step 4: Account B users query via the resource link
+└── Data stays in Account A's S3 — no copying!
+
+RESOURCE LINK:
+├── A pointer in Account B's Glue Catalog → Account A's table
+├── Account B queries the resource link (not the original table directly)
+├── Permissions still controlled by Lake Formation
+└── Think: "shortcut" or "symbolic link" to shared resource
+
+WHAT CAN BE SHARED VIA RAM:
+├── Glue Data Catalog databases/tables (via Lake Formation)
+├── Redshift datashares
+├── VPC subnets
+├── Transit Gateway
+├── Route 53 Resolver rules
+└── License Manager configurations
+
+EXAM TRIGGER:
+├── "Share Lake Formation tables cross-account" → LF grant + RAM + resource link
+├── "Query another account's data without copying" → RAM sharing
+├── "Resource link" in answer → cross-account LF sharing pattern
+├── "Share Glue Catalog across accounts" → RAM
+└── "Cross-account Redshift" → Redshift Data Sharing (not RAM)
+
+27. Glue Connection Properties
+
+WHAT: Configuration for Glue to connect to external data stores
+TYPES: JDBC, MongoDB, Kafka, Network (for VPC resources)
+
+JDBC CONNECTION:
+├── JDBC URL: jdbc:mysql://hostname:3306/database
+├── Username/Password (or Secrets Manager reference)
+├── VPC, Subnet, Security Group (for VPC-based databases)
+├── SSL: Require SSL for encrypted connections
+└── Availability Zone: Must match the database's AZ
+
+COMMON ISSUES:
+├── "Connection failed" → Security group doesn't allow Glue's SG inbound
+├── "SSL handshake failed" → Certificate not trusted / SSL not configured
+├── "Timeout" → Wrong VPC/subnet, or database not reachable
+├── "Authentication failed" → Wrong credentials or expired password
+└── "No route to host" → Missing VPC endpoint or NAT for external DB
+
+NETWORK CONNECTION (VPC):
+├── Required when Glue job needs to access VPC resources
+├── Specifies: VPC, Subnet, Security Group
+├── Glue creates ENIs in your subnet (needs available IPs!)
+├── If subnet runs out of IPs → connection fails
+└── Security group must allow outbound to target (port 3306/5432/5439)
+
+EXAM TRIGGER:
+├── "Glue can't connect to RDS" → Check security group + VPC connection
+├── "Glue job in VPC needs S3" → VPC endpoint (not connection property)
+├── "Encrypt JDBC connection" → Enable SSL in connection properties
+├── "Glue connection timeout" → Network misconfiguration (SG/subnet/VPC)
+└── "Rotate database password for Glue" → Secrets Manager + update connection
