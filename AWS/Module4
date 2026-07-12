@@ -27,3 +27,26 @@ AUDITING:
 ├── API call audit              → CloudTrail
 ├── S3 object access            → S3 access logs or CloudTrail data events
 └── Query performance           → CloudWatch Logs
+
+1. CloudHSM vs KMS:
+   ├── "FIPS 140-2 Level 3" → CloudHSM
+   ├── "Exclusive control of HSM" → CloudHSM
+   ├── "Company manages keys" (no HSM mention) → KMS CMK
+   └── KMS = shared multi-tenant; CloudHSM = dedicated single-tenant
+
+2. VPC GATEWAY ENDPOINTS (only 2 exist!):
+   ├── S3 → Gateway Endpoint (free)
+   ├── DynamoDB → Gateway Endpoint (free)
+   └── EVERYTHING ELSE → Interface Endpoint (PrivateLink, paid)
+       (Glue, KMS, CloudWatch, STS, Secrets Manager, etc.)
+
+3. Lake Formation GetDataAccess:
+   ├── LF grant on table (SELECT) → needed
+   ├── IAM: lakeformation:GetDataAccess → ALSO needed
+   └── Missing either = "Access Denied"
+
+4. KMS Key Rotation:
+   ├── Old data stays encrypted with OLD key material
+   ├── KMS retains ALL old key versions (never deletes)
+   ├── New data uses new key material
+   └── NO automatic re-encryption of existing data
