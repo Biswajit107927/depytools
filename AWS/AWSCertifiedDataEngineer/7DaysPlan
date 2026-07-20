@@ -1,0 +1,65 @@
+7-Day Study Plan (July 11 – July 17)
+
+Given your existing experience with PySpark, AWS Glue, Lambda orchestration, and Lake Formation, you have a strong foundation. Here's an optimized plan:
+
+Day 1 (July 11) – Domain 1: Data Ingestion (Part 1)
+
+    Kinesis Data Streams vs. Firehose vs. Analytics — when to use which
+    AWS DMS — full load vs. CDC, source/target configurations
+    AppFlow for SaaS integrations
+    Batch vs. real-time ingestion patterns
+    Practice: 15 questions on ingestion
+
+Day 2 (July 12) – Domain 1: Data Transformation (Part 2)
+
+    AWS Glue deep dive — Job Bookmarks, Crawlers, DynamicFrames vs. DataFrames
+    Spark on EMR — cluster sizing, EMRFS, transient vs. persistent clusters
+    Data formats: Parquet vs. ORC vs. Avro (when to use each)
+    Schema evolution and schema registry
+    Practice: 15 questions on transformation
+
+Day 3 (July 13) – Domain 2: Data Store Management (Part 1)
+
+    S3 — storage classes, lifecycle policies, versioning, replication
+    Redshift — distribution styles, sort keys, COPY command, Spectrum, concurrency scaling
+    Data modeling — star schema, denormalization for analytics
+    Practice: 15 questions on data stores
+
+Day 4 (July 14) – Domain 2: Data Store Management (Part 2)
+
+    DynamoDB — partition keys, GSI/LSI, streams, capacity modes
+    RDS/Aurora — read replicas, Multi-AZ, Aurora Serverless
+    Lake Formation — blueprints, governed tables, tag-based access
+    Data lake architecture patterns (raw → curated → consumption)
+    Practice: 15 questions on data stores
+
+Day 5 (July 15) – Domain 3: Data Operations & Support
+
+    MWAA (Managed Airflow) — DAGs, scheduling, sensors
+    Step Functions — orchestrating Glue/Lambda/EMR workflows
+    EventBridge — event-driven pipelines
+    CloudWatch — metrics, alarms, Logs Insights for pipeline debugging
+    Data quality — Glue Data Quality, Great Expectations patterns
+    Practice: 15 questions on operations
+
+Day 6 (July 16) – Domain 4: Data Security & Governance
+
+    IAM policies for data services (S3, Glue, Redshift)
+    Lake Formation fine-grained access (row/column-level security)
+    Encryption — SSE-S3, SSE-KMS, CSE, Redshift encryption
+    VPC endpoints, PrivateLink for data services
+    CloudTrail auditing, data classification
+    Compliance patterns (GDPR, data retention)
+    Practice: 15 questions on security
+
+Day 7 (July 17) – Full Review & Practice Exam
+
+    Take a full-length 65-question practice exam (timed at 130 min)
+    Review weak areas from practice results
+    Quick revision of key decision-making scenarios:
+        "When to use Glue vs. EMR?"
+        "Kinesis Streams vs. Firehose?"
+        "Redshift vs. Athena for querying?"
+        "Step Functions vs. MWAA for orchestration?"
+    Rest well the night before! 🎯
+
